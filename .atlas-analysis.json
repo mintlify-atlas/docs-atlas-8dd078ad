@@ -1,0 +1,156 @@
+{
+  "projectType": "saas",
+  "projectName": "Makisala",
+  "projectDescription": "A platform for tour operators to create, manage, and share beautiful safari tour proposals with clients",
+  "theme": "almond",
+  "primaryColor": "#f6f0e8",
+  "lightColor": "#7c7474",
+  "darkColor": "#080808",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart"
+            ]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/proposals",
+              "features/tours",
+              "features/clients",
+              "features/content-library",
+              "features/collaboration"
+            ]
+          },
+          {
+            "group": "Tour Management",
+            "pages": [
+              "tours/creating-tours",
+              "tours/itineraries",
+              "tours/accommodations",
+              "tours/activities"
+            ]
+          },
+          {
+            "group": "Proposal Builder",
+            "pages": [
+              "proposals/creating-proposals",
+              "proposals/customization",
+              "proposals/pricing",
+              "proposals/sharing"
+            ]
+          },
+          {
+            "group": "Organization & Teams",
+            "pages": [
+              "organization/setup",
+              "organization/team-management",
+              "organization/settings",
+              "organization/billing"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "api/introduction",
+              "api/authentication"
+            ]
+          },
+          {
+            "group": "Database Schema",
+            "pages": [
+              "api/schema/organizations",
+              "api/schema/proposals",
+              "api/schema/tours",
+              "api/schema/clients"
+            ]
+          },
+          {
+            "group": "tRPC Routers",
+            "pages": [
+              "api/routers/proposals",
+              "api/routers/tours",
+              "api/routers/clients",
+              "api/routers/accommodations",
+              "api/routers/activities"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Development",
+        "groups": [
+          {
+            "group": "Setup",
+            "pages": [
+              "development/installation",
+              "development/environment",
+              "development/database"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "development/monorepo",
+              "development/tech-stack",
+              "development/authentication"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "development/contributing",
+              "development/testing",
+              "development/deployment"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Interactive proposal builder with drag-and-drop itinerary management",
+    "Multi-organization support with team collaboration and role-based access",
+    "Tour template library with clone and customize capabilities",
+    "Client management with proposal tracking and commenting",
+    "PDF export and email sharing for proposals",
+    "Content library for accommodations, activities, and national parks",
+    "Real-time collaboration with comments and assignments",
+    "Pricing calculator with customizable traveler groups and extras",
+    "Authentication with Better Auth including passkey support",
+    "Integrated with Polar.sh for subscription management"
+  ],
+  "publicApiSurface": [
+    "POST /api/auth/[...better-auth]",
+    "GET/POST /api/proposal/[id]/pdf",
+    "POST /api/proposal/send-email",
+    "POST /api/upload",
+    "GET /api/upload-url",
+    "POST /api/trpc/[trpc]",
+    "proposals.create()",
+    "proposals.update()",
+    "proposals.delete()",
+    "tours.list()",
+    "tours.clone()",
+    "clients.create()",
+    "clients.list()",
+    "accommodations.list()",
+    "activities.list()",
+    "nationalParks.list()",
+    "organizations.update()",
+    "invitations.create()",
+    "comments.create()",
+    "assignments.create()"
+  ]
+}
