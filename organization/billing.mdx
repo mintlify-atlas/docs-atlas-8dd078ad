@@ -1,0 +1,254 @@
+---
+title: Billing & Subscriptions
+description: Manage your subscription plan, billing, and payments via Polar.sh
+---
+
+## Subscription Plans
+
+Makisala offers four subscription tiers to fit your agency's needs. All plans are billed monthly through [Polar.sh](https://polar.sh), our payment partner.
+
+### Free Plan
+
+Perfect for trying out Makisala:
+
+- **Team**: 1 user (owner only)
+- **Proposals**: Limited features
+- **Tour Templates**: Access to shared templates
+- **Storage**: Basic image library
+- **Support**: Community support
+
+<Note>
+  All new organizations start with a 14-day free trial of Pro features, then automatically revert to the Free plan unless you subscribe.
+</Note>
+
+### Starter Plan
+
+Ideal for small agencies:
+
+- **Team**: Up to 3 members
+- **Proposals**: Unlimited proposals
+- **Tour Templates**: Full template library
+- **Branding**: Custom logo and branding
+- **Storage**: Expanded image library
+- **Support**: Email support
+
+### Pro Plan
+
+Our most popular plan for growing agencies:
+
+- **Team**: Up to 10 members
+- **Proposals**: Unlimited proposals with advanced features
+- **Client Management**: Full CRM features
+- **Collaboration**: Proposal assignments and comments
+- **Custom Tours**: Create unlimited custom tours
+- **Storage**: Large image library
+- **Support**: Priority email support
+- **API Access**: REST API for integrations
+
+### Business Plan
+
+For large agencies and tour operators:
+
+- **Team**: Unlimited members
+- **Proposals**: Everything in Pro, plus:
+- **White-labeling**: Remove Makisala branding
+- **Custom Domain**: Use your own domain for proposals
+- **Advanced Permissions**: Granular role controls
+- **Storage**: Unlimited image library
+- **Support**: Dedicated support channel
+- **API Access**: Full API with webhooks
+- **SLA**: 99.9% uptime guarantee
+
+## Managing Your Subscription
+
+### Subscribing to a Plan
+
+1. Navigate to **Settings** > **Billing**
+2. Click **Upgrade** on your desired plan
+3. You'll be redirected to Polar.sh checkout
+4. Complete payment
+5. Return to Makisala - your plan is activated immediately
+
+<Tip>
+  All plans are billed monthly. You can change or cancel your subscription at any time.
+</Tip>
+
+### Viewing Subscription Details
+
+In **Settings** > **Billing**, you can view:
+
+- Current plan tier
+- Billing cycle (monthly)
+- Next billing date
+- Polar subscription ID
+- Trial end date (if applicable)
+
+### Upgrading Your Plan
+
+To upgrade to a higher tier:
+
+1. Go to **Settings** > **Billing**
+2. Click **Upgrade** next to the desired plan
+3. Complete checkout on Polar.sh
+4. Your plan upgrades immediately
+5. You'll be charged the prorated difference
+
+### Downgrading Your Plan
+
+To downgrade to a lower tier:
+
+1. Go to **Settings** > **Billing**
+2. Click **Manage Subscription** to open the Polar portal
+3. Select a lower tier
+4. Downgrade takes effect at the end of your current billing cycle
+
+<Warning>
+  Downgrading may limit access to features. For example, downgrading from Pro to Starter removes team members beyond the 3-member limit.
+</Warning>
+
+### Canceling Your Subscription
+
+To cancel:
+
+1. Navigate to **Settings** > **Billing**
+2. Click **Manage Subscription**
+3. Select **Cancel Subscription** in the Polar portal
+4. Confirm cancellation
+
+After cancellation:
+- You retain access until the end of your billing period
+- Your organization automatically downgrades to the Free plan
+- All data is preserved
+
+## Payment Management
+
+### Payment Methods
+
+Polar.sh supports:
+- Credit and debit cards (Visa, Mastercard, Amex)
+- Bank transfers (for Business plan annual billing)
+
+### Updating Payment Information
+
+1. Go to **Settings** > **Billing**
+2. Click **Manage Subscription**
+3. Update payment method in the Polar portal
+4. Save changes
+
+### Failed Payments
+
+If a payment fails:
+
+1. You'll receive an email notification at your notification email
+2. We'll retry the payment automatically
+3. After 3 failed attempts, your subscription will be suspended
+4. Update your payment method to restore access
+
+## Billing Integration (Polar.sh)
+
+Makisala uses [Polar.sh](https://polar.sh) for secure payment processing:
+
+- **PCI Compliant**: Bank-level security for payment data
+- **Automatic Billing**: Subscriptions renew automatically
+- **Webhooks**: Real-time subscription updates
+- **Customer Portal**: Self-service subscription management
+
+### How It Works
+
+1. When you subscribe, Polar creates a customer account for you
+2. Your subscription is linked to your Makisala organization
+3. Polar sends webhooks to Makisala when your subscription changes
+4. Your plan tier updates automatically based on subscription status
+
+### Subscription Webhooks
+
+Makisala listens for these Polar webhook events:
+
+- `subscription.created` - New subscription started
+- `subscription.updated` - Subscription changed (upgrade/downgrade)
+- `subscription.canceled` - Subscription canceled by user
+- `subscription.revoked` - Access fully revoked after cancellation
+
+<Note>
+  The `polarSubscriptionId` field in your organization links your Makisala account to your Polar subscription.
+</Note>
+
+## Invoices & Receipts
+
+Access invoices through the Polar customer portal:
+
+1. Go to **Settings** > **Billing**
+2. Click **View Invoices**
+3. Download invoices as PDFs
+
+Invoices include:
+- Billing period
+- Plan details
+- Amount charged
+- Payment method
+- Company information
+
+## Trial Period
+
+### 14-Day Free Trial
+
+All new organizations receive a 14-day trial:
+
+- Full access to Pro features
+- No credit card required
+- Trial end date shown in **Settings** > **Billing**
+- After trial ends, you're downgraded to Free plan
+
+### Trial Expiration
+
+Before your trial ends:
+
+1. You'll receive email reminders at 7 days, 3 days, and 1 day before expiration
+2. Choose a subscription plan in **Settings** > **Billing**
+3. Subscribe before the trial ends to maintain uninterrupted access
+
+<Tip>
+  Subscribe during your trial to avoid any interruption in service. Your trial time is credited toward your first billing cycle.
+</Tip>
+
+## Plan Comparison
+
+| Feature | Free | Starter | Pro | Business |
+|---------|------|---------|-----|----------|
+| **Team Members** | 1 | 3 | 10 | Unlimited |
+| **Proposals** | Limited | Unlimited | Unlimited | Unlimited |
+| **Custom Branding** | ✗ | ✓ | ✓ | ✓ |
+| **Client CRM** | Basic | Full | Full | Full |
+| **Proposal Comments** | ✗ | ✓ | ✓ | ✓ |
+| **Assignments** | ✗ | ✗ | ✓ | ✓ |
+| **API Access** | ✗ | ✗ | ✓ | ✓ |
+| **Webhooks** | ✗ | ✗ | ✗ | ✓ |
+| **White-label** | ✗ | ✗ | ✗ | ✓ |
+| **Custom Domain** | ✗ | ✗ | ✗ | ✓ |
+| **Support** | Community | Email | Priority | Dedicated |
+
+## Frequently Asked Questions
+
+### Can I change plans anytime?
+
+Yes! You can upgrade immediately or downgrade at the end of your billing cycle.
+
+### What happens if I cancel?
+
+You keep access until the end of your billing period, then downgrade to Free. All your data is preserved.
+
+### Do you offer annual billing?
+
+Annual billing is available for Business plans. Contact our sales team for pricing.
+
+### Is there a refund policy?
+
+We offer refunds on a case-by-case basis. Contact support within 7 days of your charge.
+
+### How does the trial work?
+
+No credit card needed. You get 14 days of Pro features, then automatically downgrade to Free if you don't subscribe.
+
+### What payment methods do you accept?
+
+All major credit cards via Polar.sh. Business plans can arrange bank transfers for annual billing.

@@ -1,0 +1,432 @@
+---
+title: 'Proposals Schema'
+description: 'Database schema for proposals, proposal days, activities, accommodations, meals, transportation, and comments'
+---
+
+## proposals
+
+Main proposal table containing tour proposals for clients.
+
+<ParamField path="id" type="text" required>
+  Unique identifier for the proposal
+</ParamField>
+
+<ParamField path="name" type="text" required>
+  Name of the proposal
+</ParamField>
+
+<ParamField path="tourId" type="uuid" required>
+  Reference to the tour ID (cascade delete)
+</ParamField>
+
+<ParamField path="clientId" type="uuid">
+  Reference to the client ID (set null on delete)
+</ParamField>
+
+<ParamField path="tourTitle" type="text">
+  Title of the tour
+</ParamField>
+
+<ParamField path="tourType" type="text">
+  Type of tour (e.g., safari, adventure, cultural)
+</ParamField>
+
+<ParamField path="theme" type="text">
+  Visual theme for the proposal. Default: `minimalistic`
+</ParamField>
+
+<ParamField path="heroImage" type="text">
+  URL to the hero image for the proposal
+</ParamField>
+
+<ParamField path="startDate" type="timestamp">
+  Start date of the tour
+</ParamField>
+
+<ParamField path="startCity" type="text">
+  Starting city for the tour
+</ParamField>
+
+<ParamField path="startCityLat" type="numeric">
+  Latitude of the starting city (precision: 10, scale: 7)
+</ParamField>
+
+<ParamField path="startCityLng" type="numeric">
+  Longitude of the starting city (precision: 10, scale: 7)
+</ParamField>
+
+<ParamField path="endCity" type="text">
+  Ending city for the tour
+</ParamField>
+
+<ParamField path="endCityLat" type="numeric">
+  Latitude of the ending city (precision: 10, scale: 7)
+</ParamField>
+
+<ParamField path="endCityLng" type="numeric">
+  Longitude of the ending city (precision: 10, scale: 7)
+</ParamField>
+
+<ParamField path="pickupPoint" type="text">
+  Pickup location for the tour
+</ParamField>
+
+<ParamField path="transferIncluded" type="text">
+  Transfer inclusion details
+</ParamField>
+
+<ParamField path="pricingRows" type="json">
+  Pricing breakdown as JSON array
+  
+  ```typescript
+  Array<{ id: string; count: number; type: string; unitPrice: number }>
+  ```
+</ParamField>
+
+<ParamField path="extras" type="json">
+  Additional extras and add-ons as JSON array
+  
+  ```typescript
+  Array<{ id: string; name: string; price: number; selected: boolean }>
+  ```
+</ParamField>
+
+<ParamField path="travelerGroups" type="json">
+  Traveler group composition as JSON array
+  
+  ```typescript
+  Array<{ id: string; count: number; type: string }>
+  ```
+</ParamField>
+
+<ParamField path="countries" type="text[]">
+  Array of countries covered in the tour
+</ParamField>
+
+<ParamField path="inclusions" type="text[]">
+  Array of items included in the tour
+</ParamField>
+
+<ParamField path="exclusions" type="text[]">
+  Array of items not included in the tour
+</ParamField>
+
+<ParamField path="hidePricing" type="boolean">
+  Whether to hide pricing in the proposal. Default: `false`
+</ParamField>
+
+<ParamField path="organizationId" type="uuid">
+  Reference to the organization ID
+</ParamField>
+
+<ParamField path="status" type="proposal_status" required>
+  Status of the proposal. Default: `draft`
+  
+  **Enum values**: `draft`, `shared`
+</ParamField>
+
+<ParamField path="createdAt" type="timestamp" required>
+  Timestamp when the proposal was created (auto-generated)
+</ParamField>
+
+<ParamField path="updatedAt" type="timestamp" required>
+  Timestamp when the proposal was last updated (auto-generated)
+</ParamField>
+
+### Relations
+
+- **tour**: Many-to-one relationship with `tours` table
+- **organization**: Many-to-one relationship with `organizations` table
+- **client**: Many-to-one relationship with `clients` table
+- **days**: One-to-many relationship with `proposalDays` table
+- **comments**: One-to-many relationship with `comments` table
+- **notes**: One-to-many relationship with `proposalNotes` table
+- **assignments**: One-to-many relationship with `proposalAssignments` table
+
+---
+
+## proposalDays
+
+Daily itinerary for proposals.
+
+<ParamField path="id" type="uuid" required>
+  Unique identifier for the proposal day (auto-generated)
+</ParamField>
+
+<ParamField path="proposalId" type="text" required>
+  Reference to the proposal ID (cascade delete)
+</ParamField>
+
+<ParamField path="dayNumber" type="integer" required>
+  Day number in the itinerary sequence
+</ParamField>
+
+<ParamField path="title" type="text">
+  Title for the day
+</ParamField>
+
+<ParamField path="description" type="text">
+  Description of activities and highlights for the day
+</ParamField>
+
+<ParamField path="previewImage" type="text">
+  URL to the preview image for the day
+</ParamField>
+
+<ParamField path="nationalParkId" type="uuid">
+  Reference to the national park ID (set null on delete)
+</ParamField>
+
+<ParamField path="destinationName" type="text">
+  Name of the destination for the day
+</ParamField>
+
+<ParamField path="destinationLat" type="numeric">
+  Latitude of the destination (precision: 10, scale: 7)
+</ParamField>
+
+<ParamField path="destinationLng" type="numeric">
+  Longitude of the destination (precision: 10, scale: 7)
+</ParamField>
+
+<ParamField path="createdAt" type="timestamp" required>
+  Timestamp when the proposal day was created (auto-generated)
+</ParamField>
+
+### Relations
+
+- **proposal**: Many-to-one relationship with `proposals` table
+- **nationalPark**: Many-to-one relationship with `nationalParks` table
+- **accommodations**: One-to-many relationship with `proposalAccommodations` table
+- **activities**: One-to-many relationship with `proposalActivities` table
+- **meals**: One-to-one relationship with `proposalMeals` table
+- **transportation**: One-to-many relationship with `proposalTransportation` table
+
+---
+
+## proposalActivities
+
+Activities scheduled for each proposal day.
+
+<ParamField path="id" type="uuid" required>
+  Unique identifier for the activity (auto-generated)
+</ParamField>
+
+<ParamField path="proposalDayId" type="uuid" required>
+  Reference to the proposal day ID (cascade delete)
+</ParamField>
+
+<ParamField path="name" type="text" required>
+  Name of the activity
+</ParamField>
+
+<ParamField path="description" type="text">
+  Detailed description of the activity
+</ParamField>
+
+<ParamField path="location" type="text">
+  Location where the activity takes place
+</ParamField>
+
+<ParamField path="moment" type="text" required>
+  Time of day for the activity
+  
+  **Values**: `Morning`, `Afternoon`, `Evening`, `Half Day`, `Full Day`, `Night`
+</ParamField>
+
+<ParamField path="time" type="text">
+  Legacy time field (deprecated - now stored in moment)
+</ParamField>
+
+<ParamField path="isOptional" type="boolean" required>
+  Whether the activity is optional. Default: `false`
+</ParamField>
+
+<ParamField path="imageUrl" type="text">
+  URL to the activity image
+</ParamField>
+
+<ParamField path="createdAt" type="timestamp" required>
+  Timestamp when the activity was created (auto-generated)
+</ParamField>
+
+### Relations
+
+- **proposalDay**: Many-to-one relationship with `proposalDays` table
+
+---
+
+## proposalAccommodations
+
+Join table linking accommodations to proposal days.
+
+<ParamField path="id" type="uuid" required>
+  Unique identifier for the link (auto-generated)
+</ParamField>
+
+<ParamField path="proposalDayId" type="uuid" required>
+  Reference to the proposal day ID (cascade delete)
+</ParamField>
+
+<ParamField path="accommodationId" type="uuid" required>
+  Reference to the accommodation ID (cascade delete)
+</ParamField>
+
+<ParamField path="createdAt" type="timestamp" required>
+  Timestamp when the link was created (auto-generated)
+</ParamField>
+
+### Relations
+
+- **proposalDay**: Many-to-one relationship with `proposalDays` table
+- **accommodation**: Many-to-one relationship with `accommodations` table
+
+---
+
+## proposalMeals
+
+Meal inclusions for each proposal day.
+
+<ParamField path="id" type="uuid" required>
+  Unique identifier for the meal record (auto-generated)
+</ParamField>
+
+<ParamField path="proposalDayId" type="uuid" required>
+  Reference to the proposal day ID (cascade delete, unique - one meal record per day)
+</ParamField>
+
+<ParamField path="breakfast" type="boolean" required>
+  Whether breakfast is included. Default: `false`
+</ParamField>
+
+<ParamField path="lunch" type="boolean" required>
+  Whether lunch is included. Default: `false`
+</ParamField>
+
+<ParamField path="dinner" type="boolean" required>
+  Whether dinner is included. Default: `false`
+</ParamField>
+
+<ParamField path="createdAt" type="timestamp" required>
+  Timestamp when the meal record was created (auto-generated)
+</ParamField>
+
+### Relations
+
+- **proposalDay**: One-to-one relationship with `proposalDays` table
+
+---
+
+## proposalTransportation
+
+Transportation details between destinations in proposals.
+
+<ParamField path="id" type="uuid" required>
+  Unique identifier for the transportation record (auto-generated)
+</ParamField>
+
+<ParamField path="proposalDayId" type="uuid" required>
+  Reference to the proposal day ID (cascade delete)
+</ParamField>
+
+<ParamField path="originName" type="text" required>
+  Name of the origin location
+</ParamField>
+
+<ParamField path="originId" type="uuid">
+  Reference to the origin national park ID (set null on delete)
+</ParamField>
+
+<ParamField path="destinationName" type="text" required>
+  Name of the destination location
+</ParamField>
+
+<ParamField path="destinationId" type="uuid">
+  Reference to the destination national park ID (set null on delete)
+</ParamField>
+
+<ParamField path="mode" type="transport_mode" required>
+  Mode of transportation
+  
+  **Enum values**: `road_4x4`, `road_shuttle`, `road_bus`, `flight_domestic`, `flight_bush`
+</ParamField>
+
+<ParamField path="durationMinutes" type="integer">
+  Duration of the journey in minutes
+</ParamField>
+
+<ParamField path="distanceKm" type="integer">
+  Distance of the journey in kilometers
+</ParamField>
+
+<ParamField path="notes" type="text">
+  Additional notes about the transportation
+</ParamField>
+
+<ParamField path="createdAt" type="timestamp" required>
+  Timestamp when the transportation record was created (auto-generated)
+</ParamField>
+
+### Relations
+
+- **proposalDay**: Many-to-one relationship with `proposalDays` table
+- **origin**: Many-to-one relationship with `nationalParks` table
+- **destination**: Many-to-one relationship with `nationalParks` table
+
+---
+
+## comments
+
+Comments on proposals (positioned on the proposal document).
+
+<ParamField path="id" type="uuid" required>
+  Unique identifier for the comment (auto-generated)
+</ParamField>
+
+<ParamField path="proposalId" type="text" required>
+  Reference to the proposal ID
+</ParamField>
+
+<ParamField path="userId" type="text">
+  Reference to the user who created the comment
+</ParamField>
+
+<ParamField path="userName" type="text">
+  Name of the user (for display purposes)
+</ParamField>
+
+<ParamField path="content" type="text" required>
+  Content of the comment
+</ParamField>
+
+<ParamField path="posX" type="numeric" required>
+  X position of the comment on the document (precision: 5, scale: 2)
+</ParamField>
+
+<ParamField path="posY" type="numeric" required>
+  Y position of the comment on the document (precision: 5, scale: 2)
+</ParamField>
+
+<ParamField path="width" type="numeric">
+  Width of the comment box (precision: 5, scale: 2)
+</ParamField>
+
+<ParamField path="height" type="numeric">
+  Height of the comment box (precision: 5, scale: 2)
+</ParamField>
+
+<ParamField path="status" type="comment_status" required>
+  Status of the comment. Default: `open`
+  
+  **Enum values**: `open`, `resolved`
+</ParamField>
+
+<ParamField path="createdAt" type="timestamp" required>
+  Timestamp when the comment was created (auto-generated)
+</ParamField>
+
+### Relations
+
+- **user**: Many-to-one relationship with `user` table
+- **proposal**: Many-to-one relationship with `proposals` table
+- **replies**: One-to-many relationship with `commentReplies` table

@@ -1,0 +1,608 @@
+---
+title: Sharing Proposals
+description: Export proposals as PDF, send via email, and manage client access to shared proposals
+---
+
+## Overview
+
+Once a proposal is ready, you can share it with clients through:
+
+- **Email**: Send personalized emails with proposal link
+- **PDF Export**: Download as PDF for offline sharing
+- **Direct Link**: Copy shareable link for manual distribution
+- **Client Access**: Clients view proposals without login
+
+## Sharing Page
+
+The sharing interface is at `/itineraries/[id]/share`:
+
+```typescript
+// apps/kitasuro/src/app/itineraries/[id]/share/page.tsx
+export default function SharePage() {
+  const proposalId = useParams().id as string;
+  
+  const [recipientEmail, setRecipientEmail] = useState('');
+  const [emailSubject, setEmailSubject] = useState('');
+  const [emailMessage, setEmailMessage] = useState(DEFAULT_MESSAGE);
+  const [testEmail, setTestEmail] = useState('');
+  
+  // Auto-publish proposal on mount
+  useEffect(() => {
+    if (tourId && !isProposalSaved) {
+      autoPublishMutation.mutate();
+    }
+  }, [tourId]);
+  
+  return (
+    <div className="mx-auto max-w-3xl">
+      {/* Published status */}
+      {/* Email form */}
+      {/* Test email */}
+      {/* Send to client */}
+    </div>
+  );
+}
+```
+
+## Publishing Proposals
+
+### Auto-Publish
+
+Proposals are automatically published when accessing the share page:
+
+```typescript
+const autoPublishMutation = useMutation({
+  mutationFn: async () => {
+    return await saveProposalMutation.mutateAsync({
+      id: proposalId,
+      name: tourTitle || 'Untitled Safari',
+      data: {
+        days,
+        startDate,
+        travelerGroups,
+        tourType,
+        pricingRows,
+        extras,
+        clientId,
+        tourTitle,
+        startCity,
+        startCityLat,
+        startCityLng,
+        endCity,
+        endCityLat,
+        endCityLng,
+        pickupPoint,
+        transferIncluded,
+        inclusions,
+        exclusions,
+        selectedTheme,
+        heroImage,
+      },
+      status: 'shared', // Marks as published
+      tourId: tourId,
+    });
+  },
+  onSuccess: () => {
+    setIsProposalSaved(true);
+  },
+});
+```
+
+### Proposal Status
+
+```typescript
+export const ProposalStatus = pgEnum('proposal_status', ['draft', 'shared']);
+
+// Draft: Only visible to organization members
+// Shared: Publicly accessible via link
+```
+
+## Email Sharing
+
+### Default Email Message
+
+```typescript
+const DEFAULT_MESSAGE = `Thank you for choosing us to plan your unforgettable journey! We've carefully crafted this personalized travel proposal based on your preferences and dreams.
+
+Inside, you'll find a detailed day-by-day itinerary, handpicked accommodations, exciting activities, and transparent pricing. We've poured our expertise and passion into creating an experience you'll cherish forever.
+
+Please take your time to review the proposal. If you have any questions or would like to make adjustments, simply leave a comment directly on the proposal or reply to this email. We're here to make your trip absolutely perfect.
+
+We can't wait to help you embark on this adventure!`;
+```
+
+### Email Settings
+
+```typescript
+// Fetch client data for default email
+const { data: clientData } = trpc.clients.getById.useQuery(
+  { id: clientId || '' },
+  { enabled: !!clientId }
+);
+
+// Pre-fill email fields
+useEffect(() => {
+  if (clientData?.email) {
+    setRecipientEmail(clientData.email);
+  }
+}, [clientData]);
+
+useEffect(() => {
+  if (tourTitle) {
+    setEmailSubject(`Your Travel Proposal: ${tourTitle}`);
+  }
+}, [tourTitle]);
+
+// Email form
+<div>
+  <Input
+    type="email"
+    value={recipientEmail}
+    onChange={(e) => setRecipientEmail(e.target.value)}
+    placeholder="client@email.com"
+  />
+  
+  <Input
+    value={emailSubject}
+    onChange={(e) => setEmailSubject(e.target.value)}
+    placeholder="Your Travel Proposal"
+  />
+  
+  <Textarea
+    value={emailMessage}
+    onChange={(e) => setEmailMessage(e.target.value)}
+    rows={10}
+  />
+</div>
+```
+
+### Send Email API
+
+```typescript
+// apps/kitasuro/src/app/api/proposal/send-email/route.ts
+export const POST = withAxiom(async (request: AxiomRequest) => {
+  const session = await auth.api.getSession({ headers: await headers() });
+  const orgId = await getOrganizationId(session);
+  
+  const body = await request.json();
+  const { proposalId, recipientEmail, recipientName, subject, message, isTest } = body;
+
+  // Fetch proposal
+  const proposal = await db.query.proposals.findFirst({
+    where: and(
+      eq(proposals.id, proposalId),
+      eq(proposals.organizationId, orgId)
+    ),
+    with: { organization: true, days: true },
+  });
+
+  // Generate proposal URL
+  const proposalUrl = `${env.NEXT_PUBLIC_APP_URL}/proposal/${proposalId}`;
+  
+  // Render email HTML
+  const html = renderProposalEmail({
+    clientName: recipientName,
+    agencyName: proposal.organization?.name,
+    proposalTitle: proposal.tourTitle || proposal.name,
+    proposalUrl,
+    startDate,
+    duration,
+    message,
+    isTest,
+  });
+
+  // Send via Resend
+  const result = await resend.emails.send({
+    from: env.RESEND_FROM_EMAIL,
+    to: recipientEmail,
+    subject: subject || `Your Travel Proposal: ${proposal.tourTitle}`,
+    html,
+  });
+
+  return NextResponse.json({ success: true });
+});
+```
+
+### Email Template
+
+```typescript
+function renderProposalEmail(props: EmailProps): string {
+  const {
+    clientName,
+    agencyName,
+    proposalTitle,
+    proposalUrl,
+    startDate,
+    duration,
+    message,
+    isTest,
+  } = props;
+
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Your Travel Proposal</title>
+</head>
+<body style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+  ${isTest ? `<div style="background-color: #fef3c7; padding: 12px; margin-bottom: 20px;">TEST EMAIL</div>` : ''}
+  
+  <div style="background-color: #ffffff; padding: 40px;">
+    <p>Dear <strong>${escapeHtml(clientName)}</strong>,</p>
+    
+    ${message ? `<p>${escapeHtml(message).replace(/\n/g, '<br />')}</p>` : ''}
+    
+    <div style="background-color: #f8f9fa; border-left: 4px solid #15803d; padding: 24px;">
+      <h2>${escapeHtml(proposalTitle)}</h2>
+      ${startDate ? `<p>Start Date: ${escapeHtml(startDate)}</p>` : ''}
+      ${duration ? `<p>Duration: ${escapeHtml(duration)}</p>` : ''}
+    </div>
+    
+    <div style="margin: 35px 0; text-align: center;">
+      <a href="${escapeHtml(proposalUrl)}" style="background-color: #15803d; color: #ffffff; padding: 16px 40px; text-decoration: none; border-radius: 8px;">
+        View Your Proposal
+      </a>
+    </div>
+    
+    <p>Warm regards,<br /><strong>${escapeHtml(agencyName)}</strong></p>
+  </div>
+</body>
+</html>
+  `.trim();
+}
+```
+
+### Test Email
+
+Send a test email before sending to client:
+
+```typescript
+const sendEmailMutation = useMutation({
+  mutationFn: async ({ isTest }: { isTest: boolean }) => {
+    const targetEmail = isTest ? testEmail : recipientEmail;
+    
+    const response = await fetch('/api/proposal/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        proposalId,
+        recipientEmail: targetEmail,
+        recipientName: clientName,
+        subject: emailSubject,
+        message: emailMessage,
+        isTest, // Adds "TEST EMAIL" banner
+      }),
+    });
+    
+    return await response.json();
+  },
+  onSuccess: ({ isTest }) => {
+    toast({
+      title: isTest ? 'Test Email Sent!' : 'Email Sent Successfully!',
+      description: isTest ? `Test sent to ${testEmail}` : `Sent to ${recipientEmail}`,
+    });
+  },
+});
+
+// UI
+<div>
+  <Input
+    type="email"
+    value={testEmail}
+    placeholder="your@email.com"
+  />
+  <Button onClick={() => sendEmailMutation.mutate({ isTest: true })}>
+    <Send className="h-4 w-4" />
+    Send Test
+  </Button>
+</div>
+```
+
+## Direct Link Sharing
+
+### Proposal URL
+
+```typescript
+// Proposal URL format
+const proposalLink = `${window.location.origin}/proposal/${proposalId}`;
+
+// Example: https://app.makisala.com/proposal/abc123-def456
+```
+
+### Copy Link
+
+```typescript
+const copyLink = async () => {
+  await navigator.clipboard.writeText(proposalLink);
+  toast({
+    title: 'Link Copied!',
+    description: 'Proposal link copied to clipboard.',
+  });
+};
+
+<Button onClick={copyLink}>
+  <Copy className="h-3.5 w-3.5" />
+  Copy Link
+</Button>
+```
+
+### Open Proposal
+
+```typescript
+<a href={proposalLink} target="_blank" rel="noopener noreferrer">
+  <Button variant="outline">
+    <ExternalLink className="h-3.5 w-3.5" />
+    Open
+  </Button>
+</a>
+```
+
+## PDF Export
+
+### PDF Generation API
+
+```typescript
+// apps/kitasuro/src/app/api/proposal/[id]/pdf/route.ts
+export const GET = withAxiom(async (
+  request: AxiomRequest,
+  { params }: { params: Promise<{ id: string }> }
+) => {
+  const { id } = await params;
+  
+  // Check authentication
+  const session = await auth.api.getSession({ headers: await headers() });
+  const orgId = await getOrganizationId(session);
+  
+  // Check plan access for PDF export
+  const access = await checkFeatureAccess(orgId, 'pdfExport');
+  if (!access.allowed) {
+    return NextResponse.json({ error: access.reason }, { status: 403 });
+  }
+  
+  // Fetch proposal with all related data
+  const proposal = await db.query.proposals.findFirst({
+    where: and(eq(proposals.id, id), eq(proposals.organizationId, orgId)),
+    with: {
+      client: true,
+      organization: true,
+      days: {
+        with: {
+          activities: true,
+          accommodations: { with: { accommodation: true } },
+          meals: true,
+          nationalPark: true,
+        },
+        orderBy: (days, { asc }) => [asc(days.dayNumber)],
+      },
+    },
+  });
+  
+  // Transform data for PDF
+  const pdfData = {
+    tourTitle: proposal.tourTitle || proposal.name,
+    clientName: proposal.client?.name || 'Valued Client',
+    agencyName: proposal.organization?.name || 'Travel Agency',
+    startDate: proposal.startDate ? new Date(proposal.startDate) : undefined,
+    duration: proposal.days.length,
+    days: proposal.days.map((day, index) => ({
+      dayNumber: day.dayNumber,
+      date: startDate ? format(addDays(startDate, index), 'MMMM d, yyyy') : undefined,
+      title: day.title,
+      description: day.description,
+      destination: day.nationalPark?.name,
+      activities: day.activities.map((act) => ({
+        name: act.name,
+        moment: act.moment,
+      })),
+      accommodation: day.accommodations?.[0]?.accommodation?.name,
+      meals: day.meals ? {
+        breakfast: day.meals.breakfast,
+        lunch: day.meals.lunch,
+        dinner: day.meals.dinner,
+      } : undefined,
+    })),
+    pricingRows: proposal.pricingRows,
+    inclusions: proposal.inclusions,
+    exclusions: proposal.exclusions,
+  };
+  
+  // Generate PDF using @react-pdf/renderer
+  const pdfBuffer = await renderToBuffer(
+    ProposalPDF({ proposal: pdfData })
+  );
+  
+  // Return PDF
+  return new NextResponse(new Uint8Array(pdfBuffer), {
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${proposal.tourTitle}-${id}.pdf"`,
+    },
+  });
+});
+```
+
+### Download PDF
+
+```typescript
+const handleDownloadPDF = async () => {
+  const response = await fetch(`/api/proposal/${proposalId}/pdf`);
+  const blob = await response.blob();
+  
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${tourTitle}-proposal.pdf`;
+  a.click();
+  window.URL.revokeObjectURL(url);
+};
+
+<Button onClick={handleDownloadPDF}>
+  <Download className="h-4 w-4" />
+  Download PDF
+</Button>
+```
+
+### Plan Access Control
+
+PDF export is controlled by subscription plan:
+
+```typescript
+// lib/plans.ts
+export async function checkFeatureAccess(
+  orgId: string,
+  feature: 'pdfExport' | 'comments' | 'activeProposals'
+) {
+  const plan = await getOrgPlan(orgId);
+  
+  if (feature === 'pdfExport') {
+    if (!plan.limits.pdfExport) {
+      return { 
+        allowed: false, 
+        reason: 'PDF export requires a paid plan' 
+      };
+    }
+  }
+  
+  return { allowed: true };
+}
+```
+
+## Client Access
+
+### Public Viewing
+
+Clients access proposals without login at `/proposal/[id]`:
+
+```typescript
+// apps/kitasuro/src/app/proposal/[id]/page.tsx
+export default async function ItineraryPage({ params }: Props) {
+  const { id } = await params;
+  
+  // Public endpoint - no authentication required
+  const proposal = await trpc.proposals.getById({ id });
+  
+  if (!proposal) {
+    notFound();
+  }
+  
+  const transformedData = await transformProposalToItineraryData(proposal);
+  const orgPlan = await getOrgPlan(proposal.organizationId);
+  
+  const commentsEnabled = orgPlan.limits.comments;
+  const showWatermark = !orgPlan.limits.noWatermark;
+  
+  return (
+    <CommentsProvider proposalId={id} readOnly={!commentsEnabled}>
+      <CommentsOverlay>
+        {transformedData.theme === 'kudu' ? (
+          <KuduTheme data={transformedData} />
+        ) : transformedData.theme === 'discovery' ? (
+          <DiscoveryTheme data={transformedData} />
+        ) : (
+          <MinimalisticTheme data={transformedData} />
+        )}
+        
+        {showWatermark && (
+          <div className="fixed right-4 bottom-4 rounded-full bg-black/70 px-4 py-2 text-xs text-white">
+            Powered by Kitasuro
+          </div>
+        )}
+      </CommentsOverlay>
+    </CommentsProvider>
+  );
+}
+```
+
+### Metadata Generation
+
+```typescript
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { id } = await params;
+  const proposal = await getCachedProposal(id);
+  
+  const dayCount = proposal.days.length;
+  const title = proposal.tourTitle || proposal.name;
+  const orgName = proposal.organization?.name;
+  
+  const descriptionParts: string[] = [];
+  if (dayCount > 0) descriptionParts.push(`${dayCount}-day`);
+  if (proposal.tourType) descriptionParts.push(proposal.tourType.toLowerCase());
+  if (proposal.countries?.length) descriptionParts.push(`across ${proposal.countries.join(', ')}`);
+  if (proposal.startCity && proposal.endCity) {
+    descriptionParts.push(`${proposal.startCity} → ${proposal.endCity}`);
+  }
+  
+  return {
+    title: orgName ? `${title} — ${orgName}` : title,
+    description: descriptionParts.join(' '),
+    robots: { index: false, follow: false },
+    openGraph: {
+      title: orgName ? `${title} — ${orgName}` : title,
+      description: descriptionParts.join(' '),
+      type: 'website',
+    },
+  };
+}
+```
+
+## Client Comments
+
+Clients can leave comments on proposals (plan-dependent):
+
+```typescript
+export const comments = pgTable('comments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  proposalId: text('proposal_id').notNull(),
+  userId: text('user_id').references(() => user.id),
+  userName: text('user_name'),
+  content: text('content').notNull(),
+  posX: numeric('pos_x').notNull(), // Position on page
+  posY: numeric('pos_y').notNull(),
+  width: numeric('width'),
+  height: numeric('height'),
+  status: CommentStatus('status').default('open'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+// Comments are rendered as overlay pins
+<CommentsProvider proposalId={id}>
+  <CommentsOverlay>
+    {/* Proposal theme */}
+  </CommentsOverlay>
+</CommentsProvider>
+```
+
+## Best Practices
+
+### Email Communication
+
+- Always send test emails first
+- Personalize the message for each client
+- Include clear call-to-action (View Proposal button)
+- Mention how to leave feedback (comments or reply)
+
+### Link Sharing
+
+- Use direct links for WhatsApp/SMS sharing
+- Copy link for embedding in other platforms
+- Share link only after proposal is finalized
+
+### PDF Export
+
+- Download PDF for offline presentations
+- Send PDF as email attachment for clients without internet
+- Keep PDF version for records
+
+### Client Experience
+
+- Ensure proposal is published before sharing
+- Test proposal link before sending to client
+- Enable comments for client feedback
+- Monitor proposal views and engagement
+
+## Next Steps
+
+- [Create new proposals](/proposals/creating-proposals)
+- [Customize themes](/proposals/customization)
+- [Configure pricing](/proposals/pricing)

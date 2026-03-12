@@ -1,0 +1,692 @@
+---
+title: Authentication Architecture
+description: Better Auth implementation with passkey support and multi-tenant organizations
+---
+
+Makisala uses **Better Auth** (v1.4.18) as its authentication framework, with support for passkeys, multi-tenant organizations, and OAuth providers.
+
+## Overview
+
+Better Auth is a modern authentication framework built specifically for Next.js applications. It provides:
+
+- Type-safe authentication primitives
+- Built-in database adapters
+- Plugin system for extended functionality
+- React hooks for client-side usage
+- Server-side session management
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                      Client Layer                       │
+│                                                         │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │  authClient (React)                              │  │
+│  │  - useSession()                                  │  │
+│  │  - signIn() / signUp() / signOut()              │  │
+│  │  - organization.create()                         │  │
+│  │  - passkey.register()                            │  │
+│  └──────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          │ HTTP / tRPC
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│                      Server Layer                       │
+│                                                         │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │  Better Auth Instance                            │  │
+│  │  - Session management                            │  │
+│  │  - Email/password auth                           │  │
+│  │  - Google OAuth                                  │  │
+│  │  - Email verification                            │  │
+│  └──────────────────────────────────────────────────┘  │
+│                                                         │
+│  ┌──────────────────────────────────────────────────┐  │
+│  │  Plugins                                         │  │
+│  │  - Passkey Plugin                                │  │
+│  │  - Organization Plugin                           │  │
+│  │  - Polar Plugin (billing)                        │  │
+│  └──────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│                     Database Layer                      │
+│                                                         │
+│  Tables:                                               │
+│  - user                                                │
+│  - session                                             │
+│  - account (OAuth providers)                           │
+│  - verification                                        │
+│  - passkey                                             │
+│  - organizations                                       │
+│  - member (user ↔ org mapping)                        │
+│  - invitation                                          │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Server Configuration
+
+The auth instance is configured in `apps/kitasuro/src/lib/auth.ts`:
+
+```typescript
+import { betterAuth } from 'better-auth'
+import { drizzleAdapter } from 'better-auth/adapters/drizzle'
+import { organization } from 'better-auth/plugins'
+import { passkey } from '@better-auth/passkey'
+import { polar } from '@polar-sh/better-auth'
+
+export const auth = betterAuth({
+  baseURL: env.NEXT_PUBLIC_APP_URL,
+  trustedOrigins: [env.NEXT_PUBLIC_APP_URL],
+  
+  // Database connection via Drizzle adapter
+  database: drizzleAdapter(db, { provider: 'pg' }),
+  
+  // Email/password authentication
+  emailAndPassword: {
+    enabled: true,
+    requireEmailVerification: true,
+  },
+  
+  // Email verification flow
+  emailVerification: {
+    sendVerificationEmail: async ({ user, url }) => {
+      // Custom email sending logic
+    },
+    sendOnSignUp: true,
+    autoSignInAfterVerification: true,
+  },
+  
+  // OAuth providers
+  socialProviders: {
+    google: {
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+      prompt: 'select_account',
+    },
+  },
+  
+  // Automatic account linking for same email
+  accountLinking: {
+    enabled: true,
+    trustedProviders: ['google'],
+  },
+  
+  // Database hooks for custom logic
+  databaseHooks: {
+    session: {
+      create: {
+        before: async (session) => {
+          // Set initial activeOrganizationId
+        },
+      },
+    },
+    user: {
+      create: {
+        after: async (user) => {
+          // Create default organization or accept invitation
+        },
+      },
+    },
+  },
+  
+  // Plugins
+  plugins: [
+    passkey({ /* ... */ }),
+    organization({ /* ... */ }),
+    polar({ /* ... */ }),
+  ],
+})
+```
+
+## Client Configuration
+
+The client is configured in `apps/kitasuro/src/lib/auth-client.ts`:
+
+```typescript
+import { createAuthClient } from 'better-auth/react'
+import { organizationClient } from 'better-auth/client/plugins'
+import { passkeyClient } from '@better-auth/passkey/client'
+import { polarClient } from '@polar-sh/better-auth/client'
+
+export const authClient = createAuthClient({
+  baseURL: env.NEXT_PUBLIC_APP_URL,
+  plugins: [
+    organizationClient(),
+    passkeyClient(),
+    polarClient(),
+  ],
+})
+
+export const {
+  signIn,
+  signUp,
+  signOut,
+  useSession,
+  organization,
+  useActiveOrganization,
+  useListOrganizations,
+  checkout,
+  customer,
+} = authClient
+```
+
+## Authentication Methods
+
+### Email/Password
+
+Users can sign up with email and password. Email verification is required before accessing the application.
+
+**Sign Up Flow:**
+
+1. User submits email + password
+2. Better Auth creates user record
+3. Verification email sent via Resend
+4. User clicks verification link
+5. Email verified, auto sign-in
+6. `databaseHooks.user.create.after` creates default organization
+
+**Sign In:**
+
+```typescript
+import { signIn } from '@/lib/auth-client'
+
+await signIn.email({
+  email: '[email protected]',
+  password: 'secure-password',
+})
+```
+
+### OAuth (Google)
+
+Google OAuth is configured with forced account selection for better UX.
+
+**Sign In:**
+
+```typescript
+import { signIn } from '@/lib/auth-client'
+
+await signIn.social({
+  provider: 'google',
+  callbackURL: '/dashboard',
+})
+```
+
+**Account Linking:**
+
+If a user signs in with Google using an email that already exists with password auth, the accounts are automatically linked.
+
+### Passkeys (WebAuthn)
+
+Passkeys provide passwordless authentication using biometrics or security keys.
+
+**Registration:**
+
+```typescript
+import { authClient } from '@/lib/auth-client'
+
+// Register a passkey for the current user
+await authClient.passkey.addPasskey({
+  name: 'MacBook Pro Touch ID',
+})
+```
+
+**Authentication:**
+
+```typescript
+// Sign in with passkey
+await authClient.passkey.signInWithPasskey()
+```
+
+**Server Configuration:**
+
+```typescript
+passkey({
+  rpID: new URL(env.NEXT_PUBLIC_APP_URL).hostname,
+  rpName: 'Ratiba',
+  origin: env.NEXT_PUBLIC_APP_URL,
+})
+```
+
+**Database Schema:**
+
+```typescript
+export const passkey = pgTable('passkey', {
+  id: text('id').primaryKey(),
+  name: text('name'),
+  publicKey: text('public_key').notNull(),
+  userId: text('user_id').notNull().references(() => user.id),
+  credentialID: text('credential_id').notNull().unique(),
+  counter: integer('counter').notNull(),
+  deviceType: text('device_type').notNull(),
+  backedUp: boolean('backed_up').notNull(),
+  transports: text('transports'),
+  aaguid: text('aaguid'),
+  createdAt: timestamp('created_at').$defaultFn(() => new Date()),
+})
+```
+
+## Multi-Tenant Organizations
+
+The **Organization Plugin** enables multi-tenant architecture where:
+
+- Users can belong to multiple organizations
+- Each organization has members with roles (admin/member)
+- Sessions track an `activeOrganizationId`
+- Organizations can be created, users invited, etc.
+
+### Organization Schema
+
+```typescript
+export const organizations = pgTable('organizations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  logoUrl: text('logo_url'),
+  planTier: PlanTier('plan_tier').default('free').notNull(),
+  trialEndsAt: timestamp('trial_ends_at'),
+  polarSubscriptionId: text('polar_subscription_id'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+})
+
+export const member = pgTable('member', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull().references(() => user.id),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  role: text('role').notNull().default('member'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+export const invitation = pgTable('invitation', {
+  id: text('id').primaryKey(),
+  email: text('email').notNull(),
+  inviterId: text('inviter_id').references(() => user.id),
+  organizationId: uuid('organization_id').notNull().references(() => organizations.id),
+  role: text('role').notNull().default('member'),
+  status: text('status').notNull().default('pending'),
+  expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+```
+
+### Plugin Configuration
+
+```typescript
+organization({
+  // Send invitation email
+  async sendInvitationEmail(data) {
+    const inviteUrl = `${env.NEXT_PUBLIC_APP_URL}/invite/${data.id}`
+    await sendTeamInvitationEmail({
+      recipientEmail: data.email,
+      inviterName: data.inviter.user.name,
+      organizationName: data.organization.name,
+      role: data.role,
+      inviteUrl,
+    })
+  },
+  
+  allowUserToCreateOrganization: true,
+  creatorRole: 'admin',
+  invitationExpiresIn: 60 * 60 * 24 * 7, // 7 days
+  
+  // Map to custom organizations table
+  schema: {
+    organization: {
+      modelName: 'organizations',
+      fields: {
+        id: 'id',
+        name: 'name',
+        slug: 'slug',
+        logo: 'logo_url',
+        createdAt: 'created_at',
+      },
+      additionalFields: {
+        notificationEmail: {
+          type: 'string',
+          input: true,
+        },
+      },
+    },
+  },
+})
+```
+
+### Client Usage
+
+**Get Current Organization:**
+
+```typescript
+import { useActiveOrganization } from '@/lib/auth-client'
+
+function Header() {
+  const { data: org } = useActiveOrganization()
+  return <div>{org?.name}</div>
+}
+```
+
+**List User Organizations:**
+
+```typescript
+import { useListOrganizations } from '@/lib/auth-client'
+
+function OrgSwitcher() {
+  const { data: orgs } = useListOrganizations()
+  return orgs?.map(org => <div key={org.id}>{org.name}</div>)
+}
+```
+
+**Create Organization:**
+
+```typescript
+import { organization } from '@/lib/auth-client'
+
+await organization.create({
+  name: 'My Safari Company',
+  slug: 'my-safari-company',
+})
+```
+
+**Invite Member:**
+
+```typescript
+await organization.inviteMember({
+  email: '[email protected]',
+  role: 'member',
+  organizationId: 'org-id',
+})
+```
+
+**Accept Invitation:**
+
+```typescript
+await organization.acceptInvitation({
+  invitationId: 'inv-id',
+})
+```
+
+### Server-Side Organization Access
+
+In tRPC procedures, organization context is provided:
+
+```typescript
+// apps/kitasuro/src/server/trpc/init.ts
+export const protectedProcedure = publicProcedure.use(async ({ ctx, next }) => {
+  const session = await ctx.getSession()
+  if (!session?.user) {
+    throw new TRPCError({ code: 'UNAUTHORIZED' })
+  }
+
+  // Resolve organization ID from session or membership
+  const orgId = await resolveOrgId(
+    session.user.id,
+    session.session?.activeOrganizationId
+  )
+
+  return next({
+    ctx: { ...ctx, session, user: session.user, orgId },
+  })
+})
+```
+
+Now all protected procedures have `ctx.orgId` available:
+
+```typescript
+export const clientsRouter = router({
+  list: protectedProcedure.query(async ({ ctx }) => {
+    return ctx.db
+      .select()
+      .from(clients)
+      .where(eq(clients.organizationId, ctx.orgId))
+  }),
+})
+```
+
+### Admin-Only Access
+
+```typescript
+export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  const [membership] = await ctx.db
+    .select({ role: member.role })
+    .from(member)
+    .where(
+      and(
+        eq(member.userId, ctx.user.id),
+        eq(member.organizationId, ctx.orgId)
+      )
+    )
+    .limit(1)
+
+  if (membership?.role !== 'admin') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' })
+  }
+
+  return next({ ctx })
+})
+```
+
+## Session Management
+
+Better Auth manages sessions with database-backed tokens.
+
+**Session Schema:**
+
+```typescript
+export const session = pgTable('session', {
+  id: text('id').primaryKey(),
+  expiresAt: timestamp('expires_at').notNull(),
+  token: text('token').notNull().unique(),
+  userId: text('user_id').notNull().references(() => user.id),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  activeOrganizationId: uuid('active_organization_id').references(() => organizations.id),
+  createdAt: timestamp('created_at').notNull(),
+  updatedAt: timestamp('updated_at').notNull(),
+})
+```
+
+**Server-Side:**
+
+```typescript
+import { getSession } from '@/lib/session'
+
+const session = await getSession()
+if (!session?.user) {
+  redirect('/login')
+}
+```
+
+**Client-Side:**
+
+```typescript
+import { useSession } from '@/lib/auth-client'
+
+function Profile() {
+  const { data: session, isPending } = useSession()
+  
+  if (isPending) return <Spinner />
+  if (!session) return <SignInButton />
+  
+  return <div>Hello {session.user.name}</div>
+}
+```
+
+## Database Hooks
+
+Better Auth provides lifecycle hooks for custom business logic.
+
+### User Creation Hook
+
+When a user signs up, automatically create an organization or accept a pending invitation:
+
+```typescript
+databaseHooks: {
+  user: {
+    create: {
+      after: async (user) => {
+        // Check for pending invitation
+        const [pendingInvitation] = await db
+          .select()
+          .from(invitation)
+          .where(
+            and(
+              eq(invitation.email, user.email),
+              eq(invitation.status, 'pending')
+            )
+          )
+          .limit(1)
+
+        // If invitation exists, user will accept it separately
+        if (pendingInvitation) return
+
+        // No invitation - create new organization
+        const orgName = `${user.name}'s Agency`
+        const slug = `${sanitizeSlug(user.name)}-${randomBytes(8).toString('hex')}`
+
+        const [org] = await db
+          .insert(organizations)
+          .values({
+            name: orgName,
+            slug: slug,
+            trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days
+          })
+          .returning()
+
+        // Add user as admin
+        await db.insert(member).values({
+          id: randomBytes(16).toString('hex'),
+          userId: user.id,
+          organizationId: org.id,
+          role: 'admin',
+        })
+      },
+    },
+  },
+}
+```
+
+### Session Creation Hook
+
+Set the initial `activeOrganizationId` when creating a session:
+
+```typescript
+databaseHooks: {
+  session: {
+    create: {
+      before: async (session) => {
+        const [membership] = await db
+          .select({ organizationId: member.organizationId })
+          .from(member)
+          .where(eq(member.userId, session.userId))
+          .limit(1)
+
+        return {
+          data: {
+            ...session,
+            activeOrganizationId: membership?.organizationId || null,
+          },
+        }
+      },
+    },
+  },
+}
+```
+
+## Billing Integration
+
+The **Polar Plugin** integrates subscription billing:
+
+```typescript
+polar({
+  client: polarClient,
+  createCustomerOnSignUp: true,
+  use: [
+    checkout({
+      products: [
+        { productId: env.POLAR_STARTER_PRODUCT_ID, slug: 'starter' },
+        { productId: env.POLAR_PRODUCT_ID, slug: 'pro' },
+        { productId: env.POLAR_BUSINESS_PRODUCT_ID, slug: 'business' },
+      ],
+      successUrl: `${env.NEXT_PUBLIC_APP_URL}/settings?tab=billing&checkout=success`,
+      authenticatedUsersOnly: true,
+    }),
+    portal(),
+    webhooks({
+      secret: env.POLAR_WEBHOOK_SECRET,
+      onPayload: async (payload) => {
+        // Update organization plan tier based on subscription events
+        if (payload.type === 'subscription.created' || payload.type === 'subscription.updated') {
+          // Find user by Polar customer ID
+          // Update organization.planTier
+        }
+      },
+    }),
+  ],
+})
+```
+
+**Client Usage:**
+
+```typescript
+import { checkout } from '@/lib/auth-client'
+
+// Redirect to checkout
+await checkout({
+  product: 'pro',
+})
+```
+
+See [Billing Integration](/integrations/polar) for more details.
+
+## Security Considerations
+
+### Timing Attack Prevention
+
+Email sending is decoupled from request timing to prevent timing attacks:
+
+```typescript
+emailVerification: {
+  sendVerificationEmail: async ({ user, url }) => {
+    // Use setImmediate to fully decouple from request
+    setImmediate(() => {
+      sendEmailVerificationEmail({ /* ... */ })
+        .catch((error) => log.warn('Failed to send email', { error }))
+    })
+  },
+}
+```
+
+### CSRF Protection
+
+Better Auth includes built-in CSRF protection for all mutations.
+
+### Account Linking
+
+Only trusted providers (Google) are allowed for automatic account linking:
+
+```typescript
+accountLinking: {
+  enabled: true,
+  trustedProviders: ['google'],
+}
+```
+
+### Password Requirements
+
+Better Auth enforces secure password requirements by default.
+
+## Summary
+
+Makisala's authentication architecture provides:
+
+- Multiple auth methods (email/password, OAuth, passkeys)
+- Multi-tenant organization support
+- Role-based access control
+- Email verification
+- Invitation flows
+- Billing integration
+- Type-safe client and server APIs
+- Security best practices

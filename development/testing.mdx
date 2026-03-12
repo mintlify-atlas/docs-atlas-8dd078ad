@@ -1,0 +1,417 @@
+---
+title: Testing Guide
+description: Learn how to write and run tests for Makisala
+---
+
+## Testing Overview
+
+Makisala uses [Bun's built-in test runner](https://bun.sh/docs/cli/test) for fast, reliable testing. The test suite focuses on tRPC API endpoints with comprehensive coverage of authentication, authorization, and business logic.
+
+## Running Tests
+
+### Run All Tests
+
+```bash
+cd apps/kitasuro
+bun test
+```
+
+### Watch Mode
+
+Run tests in watch mode for continuous testing during development:
+
+```bash
+bun test:watch
+```
+
+### CI/CD Testing
+
+Tests run automatically on every push and pull request via GitHub Actions:
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun test
+        working-directory: apps/kitasuro
+```
+
+## Test Structure
+
+Tests are located in `apps/kitasuro/src/server/trpc/__tests__/` with the following organization:
+
+```
+__tests__/
+├── helpers/
+│   ├── setup.ts           # Global test setup and mocks
+│   ├── mock-db.ts         # Database mock implementation
+│   └── mock-context.ts    # Context factory functions
+├── routers/
+│   ├── tours.test.ts
+│   ├── clients.test.ts
+│   ├── proposals.test.ts
+│   ├── activities.test.ts
+│   ├── accommodations.test.ts
+│   ├── comments.test.ts
+│   ├── contentLibrary.test.ts
+│   ├── nationalParks.test.ts
+│   ├── notes.test.ts
+│   ├── onboarding.test.ts
+│   ├── settings.test.ts
+│   └── storage.test.ts
+└── middleware.test.ts      # Auth/admin middleware tests
+```
+
+## Writing Tests
+
+### Basic Test Structure
+
+Tests use Bun's test API with `describe`, `test`, and `expect`:
+
+```typescript
+import { describe, expect, test } from 'bun:test';
+import { createCallerFactory } from '../../init';
+import { appRouter } from '../../router';
+import { createProtectedContext } from '../helpers/mock-context';
+
+const createCaller = createCallerFactory(appRouter);
+
+describe('feature router', () => {
+  describe('endpoint', () => {
+    test('does something', async () => {
+      const { ctx, db } = createProtectedContext();
+      const caller = createCaller(ctx);
+
+      // Setup mock data
+      db._results.set('select', [{ id: '1', name: 'Test' }]);
+
+      // Call the endpoint
+      const result = await caller.feature.endpoint();
+
+      // Assert results
+      expect(result).toBeDefined();
+    });
+  });
+});
+```
+
+### Test Contexts
+
+Use context factory functions to create test contexts with different authentication states:
+
+#### Public Context (Unauthenticated)
+
+```typescript
+import { createPublicContext } from '../helpers/mock-context';
+
+test('public endpoint works', async () => {
+  const { ctx, db } = createPublicContext();
+  const caller = createCaller(ctx);
+  
+  // Test public endpoints
+});
+```
+
+#### Protected Context (Authenticated)
+
+```typescript
+import { createProtectedContext } from '../helpers/mock-context';
+
+test('requires authentication', async () => {
+  const { ctx, db } = createProtectedContext();
+  const caller = createCaller(ctx);
+  
+  // Test authenticated endpoints
+});
+```
+
+#### Admin Context
+
+```typescript
+import { createAdminContext } from '../helpers/mock-context';
+
+test('requires admin role', async () => {
+  const { ctx, db } = createAdminContext();
+  const caller = createCaller(ctx);
+  
+  // Test admin-only endpoints
+});
+```
+
+#### Custom User/Org
+
+```typescript
+const { ctx, db } = createProtectedContext({
+  user: { email: 'custom@example.com' },
+  orgId: 'custom-org-id'
+});
+```
+
+### Mocking Database Responses
+
+The mock database provides a chainable API that mimics Drizzle ORM:
+
+#### Generic Operations
+
+```typescript
+// Mock SELECT results
+db._results.set('select', [{ id: '1', name: 'Test' }]);
+
+// Mock INSERT results
+db._results.set('insert', [{ id: 'new-id' }]);
+
+// Mock UPDATE results
+db._results.set('update', { success: true });
+
+// Mock DELETE results
+db._results.set('delete', { success: true });
+```
+
+#### Table-Specific Results
+
+```typescript
+// Mock results for specific tables
+db._results.set('select.clients', [{ id: 'c-1' }]);
+db._results.set('insert.tours', [{ id: 't-1' }]);
+```
+
+#### Relational Queries
+
+```typescript
+// Mock query.tableName.findFirst()
+db._results.set('query.tours.findFirst', {
+  id: 't-1',
+  tourName: 'Safari Tour',
+  days: []
+});
+
+// Mock query.tableName.findMany()
+db._results.set('query.clients.findMany', [
+  { id: 'c-1', name: 'Client A' },
+  { id: 'c-2', name: 'Client B' }
+]);
+```
+
+#### Transaction Results
+
+```typescript
+// Mock transaction operations
+db._results.set('tx.insert', [{ id: 'new-id' }]);
+db._results.set('tx.update', { success: true });
+db._results.set('tx.delete', { success: true });
+```
+
+#### Error Handling
+
+```typescript
+// Mock database errors
+db._results.set('select', new Error('connection refused'));
+
+await expect(caller.feature.endpoint()).rejects.toThrow('connection refused');
+```
+
+#### Queued Results (Multiple Calls)
+
+```typescript
+// Different results for each call
+db._resultsQueue.set('select', [
+  [{ id: '1' }],  // First call
+  [{ id: '2' }],  // Second call
+  [{ id: '3' }]   // Third call
+]);
+```
+
+### Testing Authentication and Authorization
+
+#### Test Unauthorized Access
+
+```typescript
+test('requires authentication', async () => {
+  const { ctx } = createPublicContext();
+  const caller = createCaller(ctx);
+
+  await expect(caller.protected.endpoint()).rejects.toMatchObject({
+    code: 'UNAUTHORIZED'
+  });
+});
+```
+
+#### Test Forbidden Access
+
+```typescript
+test('requires admin role', async () => {
+  const { ctx, db } = createProtectedContext();
+  const caller = createCaller(ctx);
+
+  db._results.set('select', [{ role: 'member' }]);
+
+  await expect(caller.admin.endpoint()).rejects.toMatchObject({
+    code: 'FORBIDDEN'
+  });
+});
+```
+
+#### Test Organization Isolation
+
+```typescript
+test('throws NOT_FOUND for wrong org', async () => {
+  const { ctx, db } = createProtectedContext();
+  const caller = createCaller(ctx);
+
+  db._results.set('query.tours.findFirst', {
+    id: 't-1',
+    organizationId: 'other-org'  // Different org
+  });
+
+  await expect(caller.tours.getById({ id: 't-1' })).rejects.toMatchObject({
+    code: 'NOT_FOUND'
+  });
+});
+```
+
+### Testing Validation
+
+```typescript
+test('rejects invalid email', async () => {
+  const { ctx } = createProtectedContext();
+  const caller = createCaller(ctx);
+
+  await expect(
+    caller.clients.create({ name: 'Client', email: 'not-an-email' })
+  ).rejects.toThrow();
+});
+
+test('rejects empty name', async () => {
+  const { ctx } = createProtectedContext();
+  const caller = createCaller(ctx);
+
+  await expect(
+    caller.clients.create({ name: '' })
+  ).rejects.toThrow();
+});
+```
+
+### Testing Business Logic
+
+```typescript
+test('rejects duplicate day numbers', async () => {
+  const { ctx, db } = createProtectedContext();
+  const caller = createCaller(ctx);
+
+  db._results.set('query.tours.findFirst', { organizationId: 'org-1' });
+
+  await expect(
+    caller.tours.update({
+      id: 't-1',
+      itineraries: [
+        { dayNumber: 1, title: 'Day 1' },
+        { dayNumber: 1, title: 'Day 1 again' }
+      ]
+    })
+  ).rejects.toMatchObject({
+    code: 'BAD_REQUEST',
+    message: 'Duplicate day numbers are not allowed'
+  });
+});
+```
+
+## Test Configuration
+
+### Global Setup (bunfig.toml)
+
+```toml
+[test]
+preload = ["./src/server/trpc/__tests__/helpers/setup.ts"]
+```
+
+The setup file (`helpers/setup.ts`) mocks external dependencies:
+
+- **next/headers** - Next.js server APIs
+- **@/lib/env** - Environment variables
+- **@/lib/auth** - Authentication APIs
+- **@/lib/storage** - File storage (R2/S3)
+- **@/lib/image-utils** - Image processing
+- **@/lib/plans** - Feature access control
+- **@repo/resend** - Email service
+- **@repo/db** - Database client
+
+## Best Practices
+
+### DO
+
+- ✅ Test both success and error cases
+- ✅ Test authentication and authorization
+- ✅ Test validation logic
+- ✅ Use descriptive test names
+- ✅ Keep tests isolated and independent
+- ✅ Mock external dependencies
+- ✅ Test business logic edge cases
+
+### DON'T
+
+- ❌ Test implementation details
+- ❌ Share state between tests
+- ❌ Make real API/database calls
+- ❌ Ignore test failures
+- ❌ Skip writing tests for bug fixes
+
+## Coverage Goals
+
+Aim for comprehensive coverage of:
+
+- **Authentication** - Public vs protected endpoints
+- **Authorization** - Org isolation, role checks
+- **Validation** - Input validation, edge cases
+- **Business Logic** - Core functionality
+- **Error Handling** - Error states, edge cases
+
+## Debugging Tests
+
+### Inspect Database Calls
+
+```typescript
+test('debug db calls', async () => {
+  const { ctx, db } = createProtectedContext();
+  const caller = createCaller(ctx);
+
+  await caller.feature.endpoint();
+
+  // Inspect all database calls
+  console.log(db._calls);
+  // [{ method: 'select', args: [...] }, ...]
+});
+```
+
+### Reset Mock State
+
+```typescript
+test('clean slate', () => {
+  const { db } = createProtectedContext();
+  
+  // Reset all mocks
+  db._reset();
+});
+```
+
+## Continuous Integration
+
+Tests run automatically on:
+
+- Every push to `main` branch
+- Every pull request
+- Before deployment
+
+All tests must pass before code can be merged.

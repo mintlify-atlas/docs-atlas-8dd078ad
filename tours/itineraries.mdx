@@ -1,0 +1,393 @@
+---
+title: Building Itineraries
+description: Create detailed day-by-day itineraries for your tour templates
+---
+
+Itineraries are the day-by-day breakdown of your tours. Each itinerary day includes a title, description, optional national park visit, and accommodation details.
+
+## Itinerary Day Structure
+
+Each day in an itinerary is stored in the `itinerary_days` table:
+
+```typescript
+type ItineraryDay = {
+  id: string;
+  tourId: string;
+  dayNumber: number;
+  dayTitle: string;
+  overview: string;
+  national_park_id?: string;
+  // Related:
+  // - itineraryAccommodations (join table)
+};
+```
+
+## Adding Itinerary Days
+
+Itinerary days are created when updating a tour. The workflow replaces all existing days:
+
+<Steps>
+  <Step title="Prepare Day Data">
+    Structure your itinerary with sequential day numbers:
+    
+    ```typescript
+    const itinerary = [
+      {
+        dayNumber: 1,
+        title: 'Arrival in Arusha',
+        overview: 'Upon arrival at Kilimanjaro International Airport, you will be met by our representative and transferred to your hotel in Arusha. Relax and prepare for your upcoming adventure.',
+        national_park_id: null, // No park visit on arrival day
+        accommodation_id: 'arusha-hotel-uuid'
+      },
+      {
+        dayNumber: 2,
+        title: 'Tarangire National Park',
+        overview: 'After breakfast, drive to Tarangire National Park. Famous for its large elephant herds and baobab trees, you will enjoy a full day game drive with picnic lunch.',
+        national_park_id: 'tarangire-uuid',
+        accommodation_id: 'tarangire-lodge-uuid'
+      },
+      {
+        dayNumber: 3,
+        title: 'Serengeti National Park',
+        overview: 'Journey to the legendary Serengeti. The vast plains stretch endlessly, offering incredible wildlife viewing opportunities throughout the year.',
+        national_park_id: 'serengeti-uuid',
+        accommodation_id: 'serengeti-camp-uuid'
+      }
+    ];
+    ```
+  </Step>
+
+  <Step title="Update Tour with Itinerary">
+    Use the `tours.update` mutation:
+    
+    ```typescript
+    const result = await trpc.tours.update.mutate({
+      id: 'tour-uuid',
+      itineraries: itinerary
+    });
+    ```
+    
+    This will:
+    - Delete all existing itinerary days for the tour
+    - Create new day records in sequence
+    - Link accommodations via the join table
+  </Step>
+
+  <Step title="Verify Creation">
+    Fetch the tour to confirm:
+    
+    ```typescript
+    const tour = await trpc.tours.getById.query({ id: 'tour-uuid' });
+    console.log(tour.days); // Array of itinerary days
+    ```
+  </Step>
+</Steps>
+
+## Day Number Rules
+
+The API enforces strict validation on day numbers:
+
+<Warning>
+  **Sequential Requirement**
+  
+  Day numbers must start at 1 and increment by 1:
+  - ✅ Valid: `[1, 2, 3, 4, 5]`
+  - ❌ Invalid: `[1, 2, 4, 5]` (skips 3)
+  - ❌ Invalid: `[0, 1, 2, 3]` (starts at 0)
+  - ❌ Invalid: `[1, 2, 2, 3]` (duplicate 2)
+</Warning>
+
+Validation errors will throw:
+
+```typescript
+// Duplicate day numbers
+"Duplicate day numbers are not allowed"
+
+// Non-positive integers
+"Day numbers must be positive integers"
+
+// Non-sequential
+"Day numbers must be sequential starting from 1"
+```
+
+## Linking National Parks
+
+Itinerary days can reference national parks from the `national_parks` table:
+
+```typescript
+{
+  dayNumber: 3,
+  title: 'Ngorongoro Crater',
+  overview: 'Descend into the world\'s largest intact volcanic caldera...',
+  national_park_id: 'ngorongoro-uuid', // Links to nationalParks table
+  accommodation_id: 'crater-lodge-uuid'
+}
+```
+
+### Benefits of Park Linking
+
+- **Rich Content**: Access park-specific pages (overview, wildlife, weather)
+- **Location Data**: Latitude/longitude for mapping
+- **Day Templates**: Pre-written descriptions for common itineraries
+- **Wildlife Highlights**: Park-specific animal sightings
+
+## Dynamic Day Descriptions
+
+Makisala provides day content templates for common park visits:
+
+```typescript
+const template = await trpc.tours.getRandomDayTemplate.query({
+  nationalParkId: 'serengeti-uuid',
+  dayType: 'full_day',
+  excludeDescriptions: [] // Avoid repeating descriptions
+});
+
+if (template) {
+  console.log(template.description);
+  // Use this as a starting point for your day overview
+}
+```
+
+### Day Types
+
+Templates are categorized by day type:
+
+- **`arrival`**: First day, transfer and orientation
+- **`full_day`**: Full day of activities in the park
+- **`half_day`**: Partial day visit
+- **`departure`**: Final day, transfers out
+
+<Info>
+  The API returns a random template matching your criteria, allowing for variety across tours. Use `excludeDescriptions` to avoid repeating the same text in multi-day park stays.
+</Info>
+
+## Accommodation Links
+
+Each itinerary day can have one accommodation via the `itinerary_accommodations` join table:
+
+### Data Flow
+
+```typescript
+// When creating/updating itinerary:
+itineraries: [
+  {
+    dayNumber: 1,
+    // ...
+    accommodation_id: 'lodge-uuid' // Optional
+  }
+]
+
+// Database operations:
+// 1. Insert itineraryDays record
+// 2. If accommodation_id provided:
+//    Insert into itineraryAccommodations:
+//    { itineraryDayId: newDay.id, accommodationId: 'lodge-uuid' }
+```
+
+### Querying with Accommodations
+
+When fetching tours, accommodations are nested:
+
+```typescript
+const tour = await trpc.tours.getById.query({ id: 'tour-uuid' });
+
+tour.days.forEach(day => {
+  const accommodation = day.itineraryAccommodations[0]?.accommodation;
+  if (accommodation) {
+    console.log(`Day ${day.dayNumber}: ${accommodation.name}`);
+    console.log('Images:', accommodation.images);
+  }
+});
+```
+
+## Itinerary Best Practices
+
+<AccordionGroup>
+  <Accordion title="Writing Compelling Day Descriptions">
+    Effective day overviews should:
+    
+    - **Start with the activity**: "After breakfast, drive to..."
+    - **Include highlights**: Mention key animals, landscapes, or experiences
+    - **Set expectations**: Describe the pace and type of day
+    - **Mention logistics**: Transfers, meal arrangements
+    - **Create excitement**: Use vivid, inspiring language
+    
+    Example:
+    ```
+    "After an early breakfast, embark on a sunrise game drive in 
+    Serengeti National Park. The golden light illuminates the endless 
+    plains as predators complete their nocturnal hunts. You may witness 
+    lions with fresh kills, cheetahs on termite mounds scanning for prey, 
+    or massive herds of wildebeest and zebra. Return to camp for brunch 
+    and relaxation before an afternoon game drive."
+    ```
+  </Accordion>
+
+  <Accordion title="Day Title Conventions">
+    Keep titles concise and informative:
+    
+    - ✅ "Serengeti National Park - Full Day Game Drive"
+    - ✅ "Ngorongoro Crater"
+    - ✅ "Transfer to Zanzibar"
+    - ❌ "Day 3" (not descriptive)
+    - ❌ "The Most Amazing Day of Your Life!" (too vague)
+  </Accordion>
+
+  <Accordion title="Multi-Day Park Stays">
+    For tours spending multiple days in one location:
+    
+    - Vary day titles: "Serengeti - Northern Plains", "Serengeti - Central Seronera"
+    - Use different templates to avoid repetition
+    - Highlight what makes each day unique
+    - Consider different activity times (dawn, full day, sunset)
+  </Accordion>
+
+  <Accordion title="Handling Transit Days">
+    For travel days between destinations:
+    
+    - Be honest about drive times
+    - Mention scenic highlights along the route
+    - Include any stops (viewpoints, villages, lunch spots)
+    - Note if game viewing happens during transit
+    
+    Example:
+    ```
+    title: "Transfer to Lake Manyara"
+    overview: "After breakfast, journey through the Great Rift Valley 
+    escarpment with stunning views of the valley floor below. Stop at a 
+    local market before arriving at Lake Manyara in time for lunch and 
+    an afternoon game drive."
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Itinerary Length Limits
+
+- **Maximum days per tour**: 60 days
+- **Title length**: 255 characters
+- **Overview length**: 5,000 characters
+
+<Note>
+  While 60 days is the technical maximum, most safari tours range from 5-14 days. Longer tours should be broken into logical segments with clear progression.
+</Note>
+
+## Modifying Individual Days
+
+To update a single day without replacing the entire itinerary:
+
+<Steps>
+  <Step title="Fetch Current Itinerary">
+    ```typescript
+    const tour = await trpc.tours.getById.query({ id: 'tour-uuid' });
+    const days = tour.days;
+    ```
+  </Step>
+
+  <Step title="Modify Specific Day">
+    ```typescript
+    // Update day 3
+    const dayToUpdate = days.find(d => d.dayNumber === 3);
+    if (dayToUpdate) {
+      dayToUpdate.dayTitle = 'Updated Title';
+      dayToUpdate.overview = 'New description...';
+    }
+    ```
+  </Step>
+
+  <Step title="Submit Complete Itinerary">
+    ```typescript
+    await trpc.tours.update.mutate({
+      id: 'tour-uuid',
+      itineraries: days.map(d => ({
+        dayNumber: d.dayNumber,
+        title: d.dayTitle,
+        overview: d.overview,
+        national_park_id: d.national_park_id,
+        accommodation_id: d.itineraryAccommodations[0]?.accommodationId
+      }))
+    });
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  Always submit the complete itinerary when updating. Partial updates are not supported - all days are replaced.
+</Warning>
+
+## Example: Complete Itinerary
+
+Here's a full 7-day Tanzania safari itinerary:
+
+```typescript
+await trpc.tours.update.mutate({
+  id: 'tanzania-safari-uuid',
+  tourName: '7-Day Tanzania Classic Safari',
+  number_of_days: 7,
+  itineraries: [
+    {
+      dayNumber: 1,
+      title: 'Arrival in Arusha',
+      overview: 'Welcome to Tanzania! Airport transfer and hotel check-in.',
+      accommodation_id: 'arusha-hotel-uuid'
+    },
+    {
+      dayNumber: 2,
+      title: 'Tarangire National Park',
+      overview: 'Full day exploring Tarangire, famous for elephants.',
+      national_park_id: 'tarangire-uuid',
+      accommodation_id: 'tarangire-lodge-uuid'
+    },
+    {
+      dayNumber: 3,
+      title: 'Serengeti National Park',
+      overview: 'Journey to the Serengeti with game viewing en route.',
+      national_park_id: 'serengeti-uuid',
+      accommodation_id: 'serengeti-camp-uuid'
+    },
+    {
+      dayNumber: 4,
+      title: 'Serengeti - Full Day',
+      overview: 'Full day game drives in the endless plains.',
+      national_park_id: 'serengeti-uuid',
+      accommodation_id: 'serengeti-camp-uuid'
+    },
+    {
+      dayNumber: 5,
+      title: 'Ngorongoro Crater',
+      overview: 'Descend into the crater for exceptional game viewing.',
+      national_park_id: 'ngorongoro-uuid',
+      accommodation_id: 'crater-lodge-uuid'
+    },
+    {
+      dayNumber: 6,
+      title: 'Lake Manyara National Park',
+      overview: 'Explore Lake Manyara known for tree-climbing lions.',
+      national_park_id: 'manyara-uuid',
+      accommodation_id: 'manyara-lodge-uuid'
+    },
+    {
+      dayNumber: 7,
+      title: 'Departure',
+      overview: 'Transfer to Kilimanjaro Airport for your flight home.',
+      accommodation_id: 'arusha-hotel-uuid'
+    }
+  ]
+});
+```
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Creating Tours" icon="map-location-dot" href="/tours/creating-tours">
+    Learn about tour structure and creation
+  </Card>
+  <Card title="Accommodations" icon="hotel" href="/tours/accommodations">
+    Manage your accommodation library
+  </Card>
+  <Card title="National Parks" icon="tree" href="/api/introduction">
+    National park data and templates
+  </Card>
+  <Card title="Proposals" icon="file-contract" href="/proposals/creating-proposals">
+    Convert tours into client proposals
+  </Card>
+</CardGroup>

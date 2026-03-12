@@ -1,0 +1,449 @@
+---
+title: 'Database Setup'
+description: 'Set up PostgreSQL and manage database migrations with Drizzle ORM'
+---
+
+## Overview
+
+Makisala uses [PostgreSQL](https://www.postgresql.org/) as its database and [Drizzle ORM](https://orm.drizzle.team/) for type-safe database queries and migrations.
+
+The database package is located at `packages/db` and is shared across all applications in the monorepo.
+
+## PostgreSQL Installation
+
+### macOS
+
+<CodeGroup>
+
+```bash Homebrew
+brew install postgresql@14
+brew services start postgresql@14
+```
+
+```bash Postgres.app
+# Download from https://postgresapp.com/
+# Start the app and create a new server
+```
+
+</CodeGroup>
+
+### Linux (Ubuntu/Debian)
+
+```bash
+sudo apt update
+sudo apt install postgresql postgresql-contrib
+sudo systemctl start postgresql
+sudo systemctl enable postgresql
+```
+
+### Windows
+
+Download and install from [postgresql.org](https://www.postgresql.org/download/windows/)
+
+## Database Setup
+
+<Steps>
+
+<Step title="Create the database">
+
+Connect to PostgreSQL and create the Makisala database:
+
+```bash
+psql -U postgres
+```
+
+Then run:
+
+```sql
+CREATE DATABASE makisala;
+\q
+```
+
+Or create it directly from the command line:
+
+```bash
+createdb -U postgres makisala
+```
+
+</Step>
+
+<Step title="Configure DATABASE_URL">
+
+Add your database connection string to `.env`:
+
+```bash
+DATABASE_URL="postgresql://postgres:password@localhost:5432/makisala"
+```
+
+Replace `password` with your PostgreSQL password.
+
+</Step>
+
+<Step title="Push the schema">
+
+Navigate to the database package and push the schema:
+
+```bash
+cd packages/db
+bun run push
+```
+
+This will create all tables, indexes, and constraints defined in the schema.
+
+</Step>
+
+<Step title="Apply database triggers (optional)">
+
+Some features use PostgreSQL triggers. Apply them manually:
+
+```bash
+psql -U postgres -d makisala -f triggers.sql
+```
+
+</Step>
+
+</Steps>
+
+## Database Package Structure
+
+```
+packages/db/
+├── drizzle/              # Generated migrations
+│   ├── 0000_*.sql
+│   ├── 0001_*.sql
+│   └── ...
+├── src/
+│   ├── env.ts           # Environment validation
+│   ├── index.ts         # Database client export
+│   └── schema.ts        # Database schema definitions
+├── drizzle.config.ts    # Drizzle Kit configuration
+├── insert-content.ts    # Content seeding script
+└── triggers.sql         # PostgreSQL triggers
+```
+
+## Working with Drizzle ORM
+
+### Database Client
+
+The database client is exported from `packages/db`:
+
+```typescript
+import { db } from '@repo/db'
+import { accommodations, tours } from '@repo/db/schema'
+
+// Query example
+const allTours = await db.select().from(tours)
+
+// Insert example
+await db.insert(accommodations).values({
+  name: 'Mountain Resort',
+  location: 'Swiss Alps',
+  // ...
+})
+```
+
+### Schema Definition
+
+The schema is defined in `packages/db/src/schema.ts` using Drizzle's schema builder:
+
+```typescript
+import { pgTable, text, timestamp, jsonb } from 'drizzle-orm/pg-core'
+
+export const accommodations = pgTable('accommodations', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  location: text('location').notNull(),
+  amenities: jsonb('amenities'),
+  createdAt: timestamp('created_at').defaultNow(),
+  // ...
+})
+```
+
+## Migration Workflow
+
+Drizzle provides two workflows for schema changes:
+
+### 1. Push (Development)
+
+For rapid development, push schema changes directly:
+
+```bash
+cd packages/db
+bun run push
+```
+
+<Warning>
+  Push directly applies schema changes without creating migration files. Use only in development.
+</Warning>
+
+### 2. Generate Migrations (Production)
+
+For production, generate migration files:
+
+<Steps>
+
+<Step title="Update schema">
+
+Edit `packages/db/src/schema.ts` with your changes.
+
+</Step>
+
+<Step title="Generate migration">
+
+```bash
+cd packages/db
+bun run generate
+```
+
+This creates a new migration file in `drizzle/` with a unique name.
+
+</Step>
+
+<Step title="Review migration">
+
+Check the generated SQL file in `drizzle/` to ensure it's correct.
+
+</Step>
+
+<Step title="Run migration">
+
+```bash
+bun run migrate
+```
+
+This applies the migration to your database.
+
+</Step>
+
+</Steps>
+
+## Available Scripts
+
+<CodeGroup>
+
+```bash Generate Migrations
+bun run generate
+# Generates migration files from schema changes
+```
+
+```bash Run Migrations
+bun run migrate
+# Applies pending migrations to the database
+```
+
+```bash Push Schema
+bun run push
+# Directly pushes schema changes (dev only)
+```
+
+```bash Drizzle Studio
+bun run studio
+# Opens visual database browser at https://local.drizzle.studio
+```
+
+</CodeGroup>
+
+## Drizzle Studio
+
+Drizzle Studio provides a visual interface to browse and edit your database:
+
+```bash
+cd packages/db
+bun run studio
+```
+
+Open [https://local.drizzle.studio](https://local.drizzle.studio) in your browser.
+
+### Features
+
+- Browse tables and relationships
+- View and edit data
+- Run custom queries
+- Visualize schema structure
+
+## Seeding Data
+
+Makisala includes a content seeding script at `packages/db/insert-content.ts`:
+
+```bash
+cd packages/db
+echo '[{"accommodationId":"...","enhancedDescription":"..."}]' | bun insert-content.ts
+```
+
+This script accepts JSON data via stdin and updates accommodation records.
+
+### Custom Seeding
+
+Create your own seed script:
+
+```typescript seed.ts
+import { db } from './src'
+import { tours, accommodations } from './src/schema'
+
+async function seed() {
+  await db.insert(tours).values([
+    {
+      id: '1',
+      tourName: 'Mountain Adventure',
+      slug: 'mountain-adventure',
+      // ...
+    },
+  ])
+  
+  console.log('Seeding complete!')
+}
+
+seed()
+```
+
+Run it:
+
+```bash
+bun run seed.ts
+```
+
+## Database Triggers
+
+Some functionality uses PostgreSQL triggers defined in `triggers.sql`:
+
+### Automatic Slug Generation
+
+The `generate_slug_from_name` function automatically creates URL-friendly slugs:
+
+```sql
+CREATE TRIGGER set_tour_slug
+  BEFORE INSERT OR UPDATE OF tour_name
+  ON tours
+  FOR EACH ROW
+EXECUTE FUNCTION update_tour_slug();
+```
+
+When you insert or update a tour, the slug is automatically generated from `tour_name`.
+
+### Applying Triggers
+
+```bash
+psql -U postgres -d makisala -f packages/db/triggers.sql
+```
+
+<Note>
+  Triggers are not managed by Drizzle migrations. Apply them manually after schema setup.
+</Note>
+
+## Connection Management
+
+The database client uses connection caching in development:
+
+```typescript packages/db/src/index.ts
+const globalForDb = globalThis as unknown as {
+  conn: postgres.Sql | undefined
+}
+
+const conn = globalForDb.conn ?? postgres(env.DATABASE_URL)
+if (process.env.NODE_ENV !== 'production') globalForDb.conn = conn
+```
+
+This prevents creating new connections on every Hot Module Reload (HMR) update.
+
+## Troubleshooting
+
+### Connection Refused
+
+If you see `connection refused` errors:
+
+1. Ensure PostgreSQL is running:
+   ```bash
+   # macOS
+   brew services list
+   
+   # Linux
+   sudo systemctl status postgresql
+   ```
+
+2. Verify the connection string in `.env`
+
+3. Check PostgreSQL is accepting connections:
+   ```bash
+   psql -U postgres -c "SELECT version();"
+   ```
+
+### Authentication Failed
+
+If authentication fails:
+
+1. Reset your PostgreSQL password:
+   ```bash
+   psql -U postgres
+   ALTER USER postgres PASSWORD 'newpassword';
+   ```
+
+2. Update `DATABASE_URL` in `.env`
+
+### Migration Conflicts
+
+If migrations conflict:
+
+1. Check which migrations have been applied:
+   ```bash
+   psql -U postgres -d makisala -c "SELECT * FROM drizzle.__drizzle_migrations;"
+   ```
+
+2. Manually resolve conflicts in the migration files
+
+3. Consider resetting the database in development:
+   ```bash
+   dropdb -U postgres makisala
+   createdb -U postgres makisala
+   cd packages/db && bun run push
+   ```
+
+### Schema Drift
+
+If your database schema drifts from your code:
+
+```bash
+# Regenerate from current schema
+cd packages/db
+bun run generate
+bun run push
+```
+
+## Best Practices
+
+<CardGroup cols={2}>
+
+<Card title="Development" icon="code">
+  - Use `push` for quick iterations
+  - Use Drizzle Studio to inspect data
+  - Keep a separate test database
+</Card>
+
+<Card title="Production" icon="rocket">
+  - Always use migrations
+  - Review generated SQL
+  - Test migrations on staging first
+  - Backup before migrating
+</Card>
+
+<Card title="Schema Design" icon="database">
+  - Use proper indexes for queries
+  - Add foreign key constraints
+  - Use JSONB for flexible data
+  - Keep schema.ts organized
+</Card>
+
+<Card title="Queries" icon="magnifying-glass">
+  - Use Drizzle's type-safe queries
+  - Add indexes for common queries
+  - Use transactions for consistency
+  - Avoid N+1 query problems
+</Card>
+
+</CardGroup>
+
+## Next Steps
+
+- Explore the [schema definition](/packages/db/src/schema.ts) to understand the data model
+- Learn about [Drizzle ORM queries](https://orm.drizzle.team/docs/crud)
+- Set up [authentication](/development/auth) using the database
+- Implement new features with type-safe database access

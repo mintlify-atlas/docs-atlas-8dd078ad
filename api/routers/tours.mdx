@@ -1,0 +1,238 @@
+---
+title: "Tours Router"
+description: "tRPC procedures for managing tour templates and itineraries"
+---
+
+# Tours Router
+
+The tours router manages tour templates, itineraries, and day-by-day content.
+
+## Queries
+
+### list
+
+Retrieve all tours for the current organization.
+
+**Returns:** Array of tours with basic information
+
+```typescript
+const tours = await trpc.tours.list.query();
+// Returns: { id, name, days, imageUrl, overview, country, pricing, tags }
+```
+
+### getById
+
+Get complete tour details including itinerary days and accommodations.
+
+<ParamField query="id" type="string" required>
+  Tour ID
+</ParamField>
+
+**Returns:** Full tour object with nested days and accommodations
+
+```typescript
+const tour = await trpc.tours.getById.query({
+  id: 'tour-uuid'
+});
+```
+
+### getDetails
+
+Public endpoint to retrieve tour structure for proposal creation.
+
+<ParamField query="id" type="string" required>
+  Tour ID
+</ParamField>
+
+**Returns:** Simplified tour data for builder initialization
+
+```typescript
+const tourDetails = await trpc.tours.getDetails.query({
+  id: 'tour-uuid'
+});
+// Returns: { tourType, price, country, days, selectedTheme }
+```
+
+### getToursAndClients
+
+Retrieve tours and clients for the organization (used in proposal creation).
+
+**Returns:** Object with `tours` and `clients` arrays
+
+```typescript
+const data = await trpc.tours.getToursAndClients.query();
+// Returns: { tours: [...], clients: [...] }
+```
+
+### getSharedTemplates
+
+Get public tour templates available for cloning.
+
+**Returns:** Array of shared tour templates
+
+```typescript
+const templates = await trpc.tours.getSharedTemplates.query();
+```
+
+### getRandomDayTemplate
+
+Get a random day content template for a specific national park.
+
+<ParamField query="nationalParkId" type="string" required>
+  National park ID
+</ParamField>
+
+<ParamField query="dayType" type="enum">
+  Day type: `arrival`, `full_day`, `half_day`, or `departure`
+</ParamField>
+
+<ParamField query="excludeDescriptions" type="array">
+  Array of description strings to exclude (max 100)
+</ParamField>
+
+**Returns:** Random day template or null
+
+```typescript
+const dayTemplate = await trpc.tours.getRandomDayTemplate.query({
+  nationalParkId: 'park-uuid',
+  dayType: 'full_day',
+  excludeDescriptions: ['Previous day description']
+});
+```
+
+### getPageImages
+
+Retrieve featured images for multiple content pages.
+
+<ParamField query="pageIds" type="array" required>
+  Array of page IDs (max 100)
+</ParamField>
+
+**Returns:** Array of objects with `id` and `featured_image_url`
+
+```typescript
+const images = await trpc.tours.getPageImages.query({
+  pageIds: ['page-1', 'page-2']
+});
+```
+
+## Mutations
+
+### update
+
+Update tour details and itinerary days.
+
+<ParamField body="id" type="string" required>
+  Tour ID
+</ParamField>
+
+<ParamField body="tourName" type="string">
+  Tour name
+</ParamField>
+
+<ParamField body="overview" type="string">
+  Tour overview/description
+</ParamField>
+
+<ParamField body="pricing" type="string">
+  Pricing information
+</ParamField>
+
+<ParamField body="country" type="string">
+  Primary country
+</ParamField>
+
+<ParamField body="tags" type="array">
+  Array of tags (max 20 tags, each max 100 chars)
+</ParamField>
+
+<ParamField body="img_url" type="string">
+  Hero image URL
+</ParamField>
+
+<ParamField body="number_of_days" type="number">
+  Total number of days
+</ParamField>
+
+<ParamField body="itineraries" type="array">
+  Array of itinerary day objects (max 60 days)
+</ParamField>
+
+**Itinerary Day Structure:**
+
+```typescript
+interface ItineraryDay {
+  dayNumber: number;
+  title: string; // max 255 chars
+  overview?: string; // max 5000 chars
+  national_park_id?: string;
+  accommodation_id?: string;
+}
+```
+
+```typescript
+await trpc.tours.update.mutate({
+  id: 'tour-uuid',
+  tourName: 'Classic Tanzania Safari',
+  overview: 'Experience the best of Tanzania',
+  number_of_days: 7,
+  country: 'Tanzania',
+  tags: ['safari', 'wildlife', 'luxury'],
+  itineraries: [
+    {
+      dayNumber: 1,
+      title: 'Arrival in Arusha',
+      overview: 'Welcome and transfer to hotel',
+      accommodation_id: 'acc-uuid'
+    },
+    {
+      dayNumber: 2,
+      title: 'Serengeti National Park',
+      overview: 'Full day game drive',
+      national_park_id: 'park-uuid',
+      accommodation_id: 'acc-uuid'
+    }
+  ]
+});
+```
+
+**Validation Rules:**
+- Day numbers must be unique
+- Day numbers must be positive integers
+- Day numbers must be sequential starting from 1
+
+### delete
+
+Delete a tour template.
+
+<ParamField body="id" type="string" required>
+  Tour ID
+</ParamField>
+
+```typescript
+await trpc.tours.delete.mutate({
+  id: 'tour-uuid'
+});
+```
+
+### cloneTemplate
+
+Clone a shared tour template to your organization.
+
+<ParamField body="templateId" type="string" required>
+  Template tour ID to clone
+</ParamField>
+
+**Returns:** Object with `success` and `tourId`
+
+```typescript
+const result = await trpc.tours.cloneTemplate.mutate({
+  templateId: 'template-uuid'
+});
+// Returns: { success: true, tourId: 'new-tour-uuid' }
+```
+
+## Authorization
+
+- **Protected procedures**: `list`, `getById`, `update`, `delete`, `getToursAndClients`, `cloneTemplate` (requires authentication)
+- **Public procedures**: `getDetails`, `getSharedTemplates`, `getRandomDayTemplate`, `getPageImages` (no authentication required)

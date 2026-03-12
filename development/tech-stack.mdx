@@ -1,0 +1,574 @@
+---
+title: Technology Stack
+description: Core technologies and frameworks powering Makisala
+---
+
+Makisala is built with modern, type-safe technologies optimized for developer experience and performance.
+
+## Frontend Stack
+
+### Next.js 16
+
+The React framework for production applications.
+
+**Version:** 16.1.0
+
+**Key Features Used:**
+- App Router with React Server Components
+- Server Actions for mutations
+- API Routes for tRPC endpoints
+- Image optimization with `next/image`
+- MDX support in marketing site
+- Built-in TypeScript support
+
+**Configuration:**
+```typescript
+// next.config.js
+import { setupDevPlatform } from '@cloudflare/next-on-pages/next-dev'
+
+if (process.env.NODE_ENV === 'development') {
+  await setupDevPlatform()
+}
+
+export default {
+  // Next.js 16 configuration
+}
+```
+
+### React 19
+
+The latest version of React with enhanced features.
+
+**Version:** 19.0.1
+
+**New Features Leveraged:**
+- React Server Components (RSC)
+- Server Actions
+- Enhanced Suspense behavior
+- Improved hydration performance
+- Use hook for async data
+
+**Example RSC Usage:**
+```typescript
+import { db } from '@repo/db'
+import { proposals } from '@repo/db/schema'
+
+// Server Component - runs on server
+export default async function ProposalsPage() {
+  const data = await db.select().from(proposals)
+  return <ProposalsList proposals={data} />
+}
+```
+
+### TypeScript 5
+
+Static type checking throughout the codebase.
+
+**Version:** 5.x
+
+**Configuration:**
+- Strict mode enabled
+- Path aliases (`@/` for src directory)
+- Shared base config via `@repo/tsconfig`
+
+**Type Safety Across Stack:**
+```typescript
+// End-to-end type safety from DB to UI
+type Proposal = typeof proposals.$inferSelect
+type NewProposal = typeof proposals.$inferInsert
+
+// tRPC provides type-safe API calls
+const data = await trpc.proposals.list.query() // Fully typed
+```
+
+## Backend Stack
+
+### tRPC v11
+
+End-to-end typesafe APIs without code generation.
+
+**Package:** `@trpc/server` and `@trpc/react-query`
+
+**Architecture:**
+
+```typescript
+// Server: apps/kitasuro/src/server/trpc/
+import { initTRPC } from '@trpc/server'
+import superjson from 'superjson'
+
+const t = initTRPC.context<Context>().create({
+  transformer: superjson,
+})
+
+export const appRouter = router({
+  proposals: proposalsRouter,
+  clients: clientsRouter,
+  tours: toursRouter,
+  // ... more routers
+})
+
+export type AppRouter = typeof appRouter
+```
+
+**Client:**
+```typescript
+// Client: fully typed, no code generation
+import { trpc } from '@/lib/trpc'
+
+const { data } = trpc.proposals.list.useQuery()
+//    ^? Proposal[]
+```
+
+**Routers:**
+- `clients` - Client management
+- `proposals` - Proposal CRUD
+- `tours` - Tour templates
+- `activities` - Activity library
+- `accommodations` - Accommodation database
+- `nationalParks` - Park information
+- `comments` - Proposal feedback
+- `notes` - Internal notes
+- `storage` - File uploads
+- `contentLibrary` - Media management
+- `settings` - Organization settings
+- `onboarding` - User onboarding flows
+
+**Features:**
+- `protectedProcedure` - Authenticated endpoints
+- `adminProcedure` - Admin-only endpoints
+- SuperJSON transformer for Date, Map, Set serialization
+- React Query integration
+- Automatic error handling
+
+### Drizzle ORM
+
+TypeScript-first ORM with full type safety.
+
+**Version:** 0.44.3
+
+**Why Drizzle:**
+- SQL-like syntax, close to raw SQL
+- Excellent TypeScript inference
+- Migration management with Drizzle Kit
+- Zero runtime overhead
+- PostgreSQL optimized
+
+**Schema Definition:**
+```typescript
+// packages/db/src/schema.ts
+import { pgTable, text, uuid, timestamp } from 'drizzle-orm/pg-core'
+
+export const organizations = pgTable('organizations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  planTier: PlanTier('plan_tier').default('free').notNull(),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+})
+
+// Type inference
+type Organization = typeof organizations.$inferSelect
+type NewOrganization = typeof organizations.$inferInsert
+```
+
+**Queries:**
+```typescript
+import { db } from '@repo/db'
+import { eq, and } from 'drizzle-orm'
+import { proposals, proposalDays } from '@repo/db/schema'
+
+// Type-safe queries with relations
+const proposal = await db.query.proposals.findFirst({
+  where: eq(proposals.id, proposalId),
+  with: {
+    days: {
+      with: {
+        activities: true,
+        accommodations: true,
+      },
+    },
+  },
+})
+```
+
+**Migrations:**
+```bash
+cd packages/db
+bun run generate  # Generate from schema changes
+bun run migrate   # Apply migrations
+bun run studio    # Visual database explorer
+```
+
+### PostgreSQL
+
+Production-grade relational database.
+
+**Client:** `postgres` (v3.4.7)
+
+**Key Features:**
+- JSONB columns for flexible data (activities, pricing)
+- UUID primary keys
+- Timestamp columns with timezone support
+- Indexes for performance
+- Foreign key constraints
+- Enums for type safety
+
+**Connection:**
+```typescript
+import postgres from 'postgres'
+import { drizzle } from 'drizzle-orm/postgres-js'
+
+const client = postgres(process.env.DATABASE_URL!)
+export const db = drizzle(client)
+```
+
+## Authentication
+
+### Better Auth
+
+Modern authentication framework for Next.js.
+
+**Version:** 1.4.18 (kitasuro), 1.4.2 (makisala)
+
+**Features Implemented:**
+- Email/password authentication
+- OAuth (Google)
+- Email verification
+- Account linking
+- Session management
+
+**Configuration:**
+```typescript
+// apps/kitasuro/src/lib/auth.ts
+import { betterAuth } from 'better-auth'
+import { drizzleAdapter } from 'better-auth/adapters/drizzle'
+import { organization } from 'better-auth/plugins'
+import { passkey } from '@better-auth/passkey'
+
+export const auth = betterAuth({
+  database: drizzleAdapter(db, { provider: 'pg' }),
+  emailAndPassword: {
+    enabled: true,
+    requireEmailVerification: true,
+  },
+  socialProviders: {
+    google: {
+      clientId: env.GOOGLE_CLIENT_ID,
+      clientSecret: env.GOOGLE_CLIENT_SECRET,
+    },
+  },
+  plugins: [
+    passkey({ /* ... */ }),
+    organization({ /* ... */ }),
+  ],
+})
+```
+
+**Client Usage:**
+```typescript
+import { authClient } from '@/lib/auth-client'
+
+const { data: session } = authClient.useSession()
+const { signIn, signOut, signUp } = authClient
+```
+
+See [Authentication Architecture](/development/authentication) for details.
+
+## Styling
+
+### Tailwind CSS 4
+
+Utility-first CSS framework.
+
+**Version:** 4.x (latest)
+
+**Configuration:**
+- PostCSS plugin: `@tailwindcss/postcss`
+- Prettier plugin for class sorting
+- Custom design tokens
+
+**Utilities:**
+- `tailwind-merge` for class merging
+- `clsx` for conditional classes
+
+**Example:**
+```tsx
+import { cn } from '@/lib/utils'
+
+function Button({ className, variant }) {
+  return (
+    <button
+      className={cn(
+        'px-4 py-2 rounded-md font-medium transition-colors',
+        variant === 'primary' && 'bg-blue-600 text-white hover:bg-blue-700',
+        variant === 'secondary' && 'bg-gray-200 text-gray-900 hover:bg-gray-300',
+        className
+      )}
+    />
+  )
+}
+```
+
+### Radix UI
+
+Headless UI primitives for accessibility.
+
+**Components Used:**
+- Dialog, Popover, Tooltip
+- Select, Checkbox, Radio Group
+- Accordion, Tabs, Navigation Menu
+- Dropdown Menu, Context Menu
+- Slider, Switch
+- Toast notifications
+
+**Example:**
+```tsx
+import * as Dialog from '@radix-ui/react-dialog'
+
+function Modal({ children }) {
+  return (
+    <Dialog.Root>
+      <Dialog.Trigger>Open</Dialog.Trigger>
+      <Dialog.Portal>
+        <Dialog.Overlay className="fixed inset-0 bg-black/50" />
+        <Dialog.Content className="fixed top-1/2 left-1/2 ...">
+          {children}
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
+```
+
+## State Management
+
+### TanStack Query (React Query) v5
+
+Async state management and data synchronization.
+
+**Version:** 5.90.16 (kitasuro), 5.83.0 (makisala)
+
+**Integration with tRPC:**
+```typescript
+import { trpc } from '@/lib/trpc'
+
+function ProposalsList() {
+  const { data, isLoading } = trpc.proposals.list.useQuery()
+  const createMutation = trpc.proposals.create.useMutation()
+  
+  // Automatic caching, refetching, optimistic updates
+}
+```
+
+**Features:**
+- Automatic background refetching
+- Optimistic updates
+- Cache invalidation
+- Infinite queries for pagination
+- Devtools for debugging
+
+## Form Management
+
+### React Hook Form
+
+Performant form management with minimal re-renders.
+
+**Version:** 7.60.0
+
+**With Zod Validation:**
+```typescript
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+
+const schema = z.object({
+  name: z.string().min(1),
+  email: z.string().email(),
+})
+
+function Form() {
+  const form = useForm({
+    resolver: zodResolver(schema),
+  })
+  
+  return <form onSubmit={form.handleSubmit(onSubmit)} />
+}
+```
+
+## Third-Party Services
+
+### Cloudinary
+
+Image and video management platform.
+
+**Package:** `cloudinary` v2.7.0
+
+**Use Cases:**
+- Organization logo uploads
+- Tour and accommodation images
+- Proposal hero images
+- Automatic optimization and transformations
+
+### AWS S3 (R2 Compatible)
+
+Object storage for files.
+
+**Package:** `@aws-sdk/client-s3` v3.986.0
+
+**Use Cases:**
+- Media library (organization images)
+- Document storage
+- PDF generation output
+
+### Polar.sh
+
+Billing and subscription management.
+
+**Package:** `@polar-sh/better-auth` v1.8.0
+
+**Use Cases:**
+- Plan tier management (free, starter, pro, business)
+- Checkout flows
+- Customer portal
+- Webhook handling for subscription events
+
+### Resend
+
+Transactional email service.
+
+**Package:** `resend` v4.0.0
+
+**Email Types:**
+- Email verification
+- Team invitations
+- Password resets
+
+## Runtime
+
+### Bun
+
+Fast JavaScript runtime and package manager.
+
+**Why Bun:**
+- Faster package installation
+- Built-in TypeScript support
+- Fast test runner
+- Native ESM support
+- Drop-in Node.js replacement
+
+**Scripts:**
+```json
+{
+  "scripts": {
+    "dev": "bun --bun next dev",
+    "build": "bun --bun next build",
+    "start": "bun --bun next start",
+    "test": "bun test"
+  }
+}
+```
+
+## Development Tools
+
+### ESLint
+
+Linting for code quality and consistency.
+
+**Plugins:**
+- `@tanstack/eslint-plugin-query`
+- `eslint-plugin-prettier`
+
+### Prettier
+
+Code formatting.
+
+**Plugins:**
+- `prettier-plugin-tailwindcss` for class sorting
+
+### TypeScript
+
+Static type checking.
+
+**Version:** 5.x
+
+### TSX
+
+TypeScript execution for scripts.
+
+**Package:** `tsx` v4.20.3
+
+## Monitoring and Analytics
+
+### Next Axiom
+
+Structured logging and error tracking.
+
+**Package:** `next-axiom` v1.10.0
+
+**Usage:**
+```typescript
+import { log } from '@/lib/logger'
+
+log.info('User signed in', { userId, orgId })
+log.error('Payment failed', { error, customerId })
+```
+
+### PostHog
+
+Product analytics and feature flags.
+
+**Packages:**
+- `posthog-js` v1.265.1 (client)
+- `posthog-node` v5.8.4 (server)
+
+### Vercel Analytics
+
+Web analytics for performance and user behavior.
+
+**Package:** `@vercel/analytics` v1.5.0 (makisala)
+
+## Testing
+
+### Bun Test
+
+Built-in test runner.
+
+**Test Files:**
+```
+apps/kitasuro/src/server/trpc/__tests__/
+  routers/
+    tours.test.ts
+    proposals.test.ts
+    clients.test.ts
+    # ... more router tests
+  helpers/
+    setup.ts
+    mock-db.ts
+    mock-context.ts
+  middleware.test.ts
+```
+
+**Example Test:**
+```typescript
+import { describe, test, expect } from 'bun:test'
+import { createCaller } from '@/server/trpc/caller'
+
+describe('proposals.create', () => {
+  test('creates proposal with valid data', async () => {
+    const caller = createCaller(mockContext)
+    const result = await caller.proposals.create({ /* ... */ })
+    expect(result.id).toBeDefined()
+  })
+})
+```
+
+## Summary
+
+Makisala leverages cutting-edge technologies for:
+
+- **Type Safety**: TypeScript + tRPC + Drizzle provide end-to-end types
+- **Developer Experience**: Fast feedback loops with Bun and Next.js
+- **Performance**: React 19 RSC, optimized queries, edge-ready
+- **Scalability**: Multi-tenant architecture, PostgreSQL, object storage
+- **Modern Auth**: Passkeys, OAuth, organizations
+- **Best Practices**: ESLint, Prettier, testing, structured logging

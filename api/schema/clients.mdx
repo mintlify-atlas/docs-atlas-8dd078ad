@@ -1,0 +1,83 @@
+---
+title: 'Clients Schema'
+description: 'Database schema for clients and their relationships'
+---
+
+## clients
+
+Client records for tour proposals and bookings.
+
+<ParamField path="id" type="uuid" required>
+  Unique identifier for the client (auto-generated)
+</ParamField>
+
+<ParamField path="organizationId" type="uuid" required>
+  Reference to the organization ID (cascade delete)
+</ParamField>
+
+<ParamField path="name" type="text" required>
+  Full name of the client
+</ParamField>
+
+<ParamField path="email" type="text">
+  Email address of the client
+</ParamField>
+
+<ParamField path="phone" type="text">
+  Phone number of the client
+</ParamField>
+
+<ParamField path="countryOfResidence" type="text">
+  Client's country of residence
+</ParamField>
+
+<ParamField path="notes" type="text">
+  Internal notes about the client
+</ParamField>
+
+<ParamField path="createdAt" type="timestamp" required>
+  Timestamp when the client record was created (auto-generated)
+</ParamField>
+
+<ParamField path="updatedAt" type="timestamp" required>
+  Timestamp when the client record was last updated (auto-generated)
+</ParamField>
+
+## Relations
+
+The `clients` table has the following relationships with other tables:
+
+### organization
+
+Many-to-one relationship with the `organizations` table.
+
+- Each client belongs to one organization
+- Links to `organizations.id` via `clients.organizationId`
+- Cascade delete: when an organization is deleted, all associated clients are deleted
+
+### proposals
+
+One-to-many relationship with the `proposals` table.
+
+- A client can have multiple proposals
+- Proposals reference the client via `proposals.clientId`
+- Set null on delete: when a client is deleted, associated proposals have their `clientId` set to null
+
+## Usage Example
+
+Clients are typically created when an organization wants to track potential or confirmed customers for tour proposals. Each client record can be associated with multiple proposals, allowing organizations to maintain a history of all proposals sent to a particular client.
+
+```typescript
+// Example client data structure
+const client = {
+  id: "550e8400-e29b-41d4-a716-446655440000",
+  organizationId: "123e4567-e89b-12d3-a456-426614174000",
+  name: "John Doe",
+  email: "john.doe@example.com",
+  phone: "+1234567890",
+  countryOfResidence: "United States",
+  notes: "Interested in safari tours",
+  createdAt: "2024-01-15T10:30:00Z",
+  updatedAt: "2024-01-15T10:30:00Z"
+}
+```

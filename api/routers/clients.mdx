@@ -1,0 +1,170 @@
+---
+title: "Clients Router"
+description: "tRPC procedures for managing client records"
+---
+
+# Clients Router
+
+The clients router handles CRUD operations for client management.
+
+## Queries
+
+### list
+
+Retrieve paginated list of clients for the current organization.
+
+<ParamField query="query" type="string">
+  Search query for client names (min 2 characters, max 100)
+</ParamField>
+
+<ParamField query="page" type="number" default="1">
+  Page number (positive integer)
+</ParamField>
+
+<ParamField query="limit" type="number" default="10">
+  Results per page (max 100)
+</ParamField>
+
+**Returns:** Object with `clients` array and `pagination` metadata
+
+```typescript
+const result = await trpc.clients.list.query({
+  query: 'john',
+  page: 1,
+  limit: 20
+});
+
+// Returns:
+// {
+//   clients: [...],
+//   pagination: {
+//     page: 1,
+//     limit: 20,
+//     hasNextPage: true
+//   }
+// }
+```
+
+### getById
+
+Retrieve a specific client by ID.
+
+<ParamField query="id" type="string" required>
+  Client ID
+</ParamField>
+
+**Returns:** Client object
+
+```typescript
+const client = await trpc.clients.getById.query({
+  id: 'client-uuid'
+});
+```
+
+## Mutations
+
+### create
+
+Create a new client record.
+
+<ParamField body="name" type="string" required>
+  Client name (min 1, max 255 characters)
+</ParamField>
+
+<ParamField body="email" type="string">
+  Client email address (max 255 characters)
+</ParamField>
+
+<ParamField body="phone" type="string">
+  Phone number (max 50 characters)
+</ParamField>
+
+<ParamField body="countryOfResidence" type="string">
+  Country of residence (max 100 characters)
+</ParamField>
+
+<ParamField body="notes" type="string">
+  Additional notes (max 5000 characters)
+</ParamField>
+
+**Returns:** Object with new client `id`
+
+```typescript
+const result = await trpc.clients.create.mutate({
+  name: 'John Smith',
+  email: 'john@example.com',
+  phone: '+1-555-0123',
+  countryOfResidence: 'United States',
+  notes: 'Interested in wildlife photography tours'
+});
+
+// Returns: { id: 'new-client-uuid' }
+```
+
+### update
+
+Update an existing client record.
+
+<ParamField body="id" type="string" required>
+  Client ID
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  Client name (min 1, max 255 characters)
+</ParamField>
+
+<ParamField body="email" type="string">
+  Client email address (max 255 characters)
+</ParamField>
+
+<ParamField body="phone" type="string">
+  Phone number (max 50 characters)
+</ParamField>
+
+<ParamField body="countryOfResidence" type="string">
+  Country of residence (max 100 characters)
+</ParamField>
+
+<ParamField body="notes" type="string">
+  Additional notes (max 5000 characters)
+</ParamField>
+
+```typescript
+await trpc.clients.update.mutate({
+  id: 'client-uuid',
+  name: 'John Smith',
+  email: 'john.new@example.com',
+  phone: '+1-555-9999',
+  countryOfResidence: 'United States',
+  notes: 'Updated contact information'
+});
+
+// Returns: { success: true }
+```
+
+### delete
+
+Delete a client record.
+
+<ParamField body="id" type="string" required>
+  Client ID
+</ParamField>
+
+```typescript
+await trpc.clients.delete.mutate({
+  id: 'client-uuid'
+});
+
+// Returns: { success: true }
+```
+
+## Authorization
+
+All procedures require authentication and verify that the client belongs to the current user's organization.
+
+## Search Behavior
+
+- Search is case-insensitive
+- Requires minimum 2 characters to filter
+- Matches partial client names
+- Results ordered by most recent first

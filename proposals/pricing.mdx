@@ -1,0 +1,558 @@
+---
+title: Pricing & Calculator
+description: Set up pricing rows, traveler groups, extras, inclusions, and exclusions in proposals
+---
+
+## Overview
+
+The pricing system in Makisala is flexible and allows you to:
+
+- Set base pricing per traveler type
+- Add optional extras
+- Define inclusions and exclusions
+- Hide pricing from clients
+- Calculate totals automatically
+
+## Pricing Data Structure
+
+### Pricing Rows
+
+Pricing rows define the base cost per traveler type:
+
+```typescript
+interface PricingRow {
+  id: string;
+  count: number;      // Number of travelers
+  type: string;       // 'Adult', 'Senior', 'Child', 'Baby'
+  unitPrice: number;  // Price per person
+}
+
+// Example
+const pricingRows: PricingRow[] = [
+  { id: '1', count: 2, type: 'Adult', unitPrice: 3500 },
+  { id: '2', count: 1, type: 'Child', unitPrice: 2200 },
+];
+
+// Total: (2 × $3,500) + (1 × $2,200) = $9,200
+```
+
+### Extras
+
+Optional add-ons that clients can select:
+
+```typescript
+interface ExtraOption {
+  id: string;
+  name: string;
+  price: number;
+  selected: boolean;  // Whether included in total
+}
+
+// Example
+const extras: ExtraOption[] = [
+  { 
+    id: '1', 
+    name: 'Hot Air Balloon Safari', 
+    price: 450, 
+    selected: true 
+  },
+  { 
+    id: '2', 
+    name: 'Helicopter Transfer', 
+    price: 850, 
+    selected: false 
+  },
+];
+
+// Selected extras total: $450
+```
+
+### Storage
+
+Pricing data is stored as JSON in the proposals table:
+
+```typescript
+export const proposals = pgTable('proposals', {
+  // ...
+  pricingRows: json('pricing_rows').$type<PricingRow[]>(),
+  extras: json('extras').$type<ExtraOption[]>(),
+  travelerGroups: json('traveler_groups').$type<TravelerGroup[]>(),
+  hidePricing: boolean('hide_pricing').default(false),
+});
+```
+
+## Pricing Page
+
+The pricing page is accessed at `/itineraries/[id]/pricing`:
+
+```typescript
+// apps/kitasuro/src/app/itineraries/[id]/pricing/page.tsx
+export default function PricingPage() {
+  const {
+    pricingRows,
+    setPricingRows,
+    extras,
+    setExtras,
+    inclusions,
+    setInclusions,
+    exclusions,
+    setExclusions,
+    hidePricing,
+    setHidePricing,
+  } = useBuilder();
+
+  // Calculate totals
+  const rowsTotal = pricingRows.reduce(
+    (acc, row) => acc + row.count * row.unitPrice, 
+    0
+  );
+  
+  const extrasTotal = extras
+    .filter((e) => e.selected)
+    .reduce((acc, e) => acc + e.price, 0);
+  
+  const grandTotal = rowsTotal + extrasTotal;
+
+  return (
+    <div className="mx-auto max-w-7xl space-y-8 px-6 pb-20">
+      {/* Pricing rows section */}
+      {/* Extras section */}
+      {/* Inclusions/Exclusions section */}
+    </div>
+  );
+}
+```
+
+## Managing Pricing Rows
+
+### Add Pricing Row
+
+```typescript
+const handleAddRow = () => {
+  setPricingRows([
+    ...pricingRows,
+    {
+      id: Math.random().toString(36).substr(2, 9),
+      count: 1,
+      type: 'Adult',
+      unitPrice: 0,
+    },
+  ]);
+};
+
+<Button onClick={handleAddRow}>
+  <Plus className="h-4 w-4" />
+  Add another price line
+</Button>
+```
+
+### Update Pricing Row
+
+```typescript
+const handleUpdateRow = (
+  rowId: string, 
+  field: keyof PricingRow, 
+  value: any
+) => {
+  setPricingRows(
+    pricingRows.map((row) => 
+      row.id === rowId ? { ...row, [field]: value } : row
+    )
+  );
+};
+
+// Update count
+<Select
+  value={row.count.toString()}
+  onValueChange={(val) => 
+    handleUpdateRow(row.id, 'count', parseInt(val))
+  }
+>
+  {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+    <SelectItem key={num} value={num.toString()}>
+      {num}
+    </SelectItem>
+  ))}
+</Select>
+
+// Update type
+<Select
+  value={row.type}
+  onValueChange={(val) => handleUpdateRow(row.id, 'type', val)}
+>
+  <SelectItem value="Adult">Adult</SelectItem>
+  <SelectItem value="Senior">Senior</SelectItem>
+  <SelectItem value="Child">Child</SelectItem>
+  <SelectItem value="Baby">Baby</SelectItem>
+</Select>
+
+// Update price
+<Input
+  type="number"
+  value={row.unitPrice}
+  onChange={(e) =>
+    handleUpdateRow(row.id, 'unitPrice', parseFloat(e.target.value) || 0)
+  }
+/>
+```
+
+### Remove Pricing Row
+
+```typescript
+const handleRemoveRow = (rowId: string) => {
+  setPricingRows(pricingRows.filter((row) => row.id !== rowId));
+};
+
+<button
+  onClick={() => handleRemoveRow(row.id)}
+  disabled={pricingRows.length === 1}
+>
+  <Trash2 className="h-4 w-4" />
+</button>
+```
+
+## Managing Extras
+
+### Add Extra
+
+```typescript
+const handleAddExtra = () => {
+  setExtras([
+    ...extras,
+    {
+      id: Math.random().toString(36).substr(2, 9),
+      name: '',
+      price: 0,
+      selected: false,
+    },
+  ]);
+};
+```
+
+### Common Extras
+
+Pre-defined extras are available:
+
+```typescript
+// lib/data/itinerary-data.ts
+export const commonExtras = [
+  { value: 'Hot Air Balloon Safari', label: 'Hot Air Balloon Safari' },
+  { value: 'Helicopter Transfer', label: 'Helicopter Transfer' },
+  { value: 'Gorilla Trekking Permit', label: 'Gorilla Trekking Permit' },
+  { value: 'Private Guide', label: 'Private Guide' },
+  { value: 'Photography Package', label: 'Photography Package' },
+  { value: 'Bush Dinner', label: 'Bush Dinner' },
+  { value: 'Spa Treatment', label: 'Spa Treatment' },
+  { value: 'Cultural Village Visit', label: 'Cultural Village Visit' },
+];
+
+// Use in combobox
+<Combobox
+  items={commonExtras}
+  value={extra.name}
+  onChange={(val) => handleUpdateExtra(extra.id, 'name', val)}
+  placeholder="Select or type option"
+/>
+```
+
+### Update Extra
+
+```typescript
+const handleUpdateExtra = (
+  extraId: string, 
+  field: keyof ExtraOption, 
+  value: any
+) => {
+  setExtras(
+    extras.map((extra) => 
+      extra.id === extraId ? { ...extra, [field]: value } : extra
+    )
+  );
+};
+
+// Toggle selection
+<Checkbox
+  checked={extra.selected}
+  onCheckedChange={(checked) => 
+    handleUpdateExtra(extra.id, 'selected', checked)
+  }
+/>
+
+// Update name
+<Combobox
+  value={extra.name}
+  onChange={(val) => handleUpdateExtra(extra.id, 'name', val)}
+/>
+
+// Update price
+<Input
+  type="number"
+  value={extra.price}
+  onChange={(e) =>
+    handleUpdateExtra(extra.id, 'price', parseFloat(e.target.value) || 0)
+  }
+/>
+```
+
+## Traveler Groups
+
+Traveler groups are managed separately from pricing rows:
+
+```typescript
+interface TravelerGroup {
+  id: string;
+  count: number;
+  type: 'Adult' | 'Senior' | 'Child' | 'Baby';
+}
+
+// Managed in header
+const { travelerGroups, setTravelerGroups } = useBuilder();
+
+const totalTravelers = travelerGroups.reduce(
+  (acc, curr) => acc + curr.count, 
+  0
+);
+
+// Add group
+const addGroup = () => {
+  setTravelerGroups([
+    ...travelerGroups,
+    { 
+      id: Math.random().toString(36).substr(2, 9), 
+      count: 1, 
+      type: 'Adult' 
+    },
+  ]);
+};
+```
+
+## Inclusions
+
+What's included in the tour price:
+
+```typescript
+const { inclusions, setInclusions } = useBuilder();
+
+// inclusions: string[]
+// Example: ['Park Fees', 'Accommodations', 'All Meals', 'Game Drives']
+
+// Add inclusion
+const addInclusion = (item: string) => {
+  setInclusions([...inclusions, item]);
+};
+
+// Remove inclusion
+const removeInclusion = (index: number) => {
+  setInclusions(inclusions.filter((_, i) => i !== index));
+};
+
+// UI Component
+function InclusionList({ items, onUpdate }: {
+  items: string[];
+  onUpdate: (items: string[]) => void;
+}) {
+  const [val, setVal] = useState('');
+  
+  return (
+    <div>
+      {items.map((item, idx) => (
+        <div key={idx}>
+          <span>{item}</span>
+          <button onClick={() => onUpdate(items.filter((_, i) => i !== idx))}>
+            <Trash2 />
+          </button>
+        </div>
+      ))}
+      
+      <div>
+        <Input
+          value={val}
+          onChange={(e) => setVal(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && val.trim()) {
+              onUpdate([...items, val.trim()]);
+              setVal('');
+            }
+          }}
+          placeholder="Add inclusion (e.g. Park Fees)"
+        />
+        <Button
+          onClick={() => {
+            if (val.trim()) {
+              onUpdate([...items, val.trim()]);
+              setVal('');
+            }
+          }}
+        >
+          <Plus />
+        </Button>
+      </div>
+    </div>
+  );
+}
+```
+
+## Exclusions
+
+What's NOT included in the tour price:
+
+```typescript
+const { exclusions, setExclusions } = useBuilder();
+
+// exclusions: string[]
+// Example: ['International Flights', 'Travel Insurance', 'Tips', 'Visas']
+
+// Same API as inclusions
+const addExclusion = (item: string) => {
+  setExclusions([...exclusions, item]);
+};
+
+const removeExclusion = (index: number) => {
+  setExclusions(exclusions.filter((_, i) => i !== index));
+};
+```
+
+## Hide Pricing
+
+Clients can choose to hide pricing from the final proposal:
+
+```typescript
+const { hidePricing, setHidePricing } = useBuilder();
+
+<div className="flex items-center gap-2">
+  <Checkbox
+    id="hide-total"
+    checked={hidePricing}
+    onCheckedChange={(checked) => setHidePricing(checked === true)}
+  />
+  <label htmlFor="hide-total">
+    Hide pricing in the final proposal
+  </label>
+</div>
+```
+
+When `hidePricing` is true, the proposal will not display pricing information to clients.
+
+## Price Display
+
+Prices are formatted consistently:
+
+```typescript
+// Format with 2 decimal places
+const formattedPrice = price.toLocaleString('en-US', {
+  minimumFractionDigits: 2,
+});
+
+// Display
+<span className="text-xl font-bold text-green-700">
+  $ {formattedPrice}
+</span>
+```
+
+## Currency
+
+Currently, only USD is supported:
+
+```typescript
+<Select defaultValue="USD">
+  <SelectTrigger>
+    <SelectValue placeholder="Select currency" />
+  </SelectTrigger>
+  <SelectContent>
+    <SelectItem value="USD">U.S. Dollar - $</SelectItem>
+    <SelectItem value="EUR">Euro - €</SelectItem>
+  </SelectContent>
+</Select>
+```
+
+## Pricing in Themes
+
+Themes display pricing conditionally:
+
+```typescript
+function PricingSection({ data }: { data: ItineraryData }) {
+  if (data.hidePricing) return null;
+  
+  return (
+    <section>
+      <h2>Pricing</h2>
+      
+      {/* Base pricing */}
+      {data.pricingRows.map((row) => (
+        <div key={row.id}>
+          <span>{row.count} × {row.type}</span>
+          <span>$ {(row.count * row.unitPrice).toLocaleString()}</span>
+        </div>
+      ))}
+      
+      {/* Extras */}
+      {data.extras.filter(e => e.selected).map((extra) => (
+        <div key={extra.id}>
+          <span>{extra.name}</span>
+          <span>$ {extra.price.toLocaleString()}</span>
+        </div>
+      ))}
+      
+      {/* Total */}
+      <div>
+        <strong>Total</strong>
+        <strong>$ {data.totalPrice.toLocaleString()}</strong>
+      </div>
+    </section>
+  );
+}
+```
+
+## Saving Pricing Data
+
+Pricing is saved as part of the proposal:
+
+```typescript
+await trpc.proposals.save.mutate({
+  id: proposalId,
+  name: tourTitle,
+  data: {
+    pricingRows: [
+      { id: '1', count: 2, type: 'Adult', unitPrice: 3500 },
+      { id: '2', count: 1, type: 'Child', unitPrice: 2200 },
+    ],
+    extras: [
+      { id: '1', name: 'Hot Air Balloon Safari', price: 450, selected: true },
+    ],
+    inclusions: ['Park Fees', 'Accommodations', 'All Meals'],
+    exclusions: ['International Flights', 'Travel Insurance'],
+    hidePricing: false,
+    // ... other fields
+  },
+  tourId: tourId,
+});
+```
+
+## Best Practices
+
+### Pricing Structure
+
+- Use clear traveler types (Adult, Child, etc.)
+- Keep pricing rows simple and transparent
+- Use extras for truly optional items
+- Be comprehensive with inclusions/exclusions
+
+### Client Communication
+
+- Clearly state what's included vs. extra
+- Use consistent currency throughout
+- Provide pricing breakdowns
+- Explain payment terms in organization settings
+
+### Pricing Strategy
+
+- Consider per-person vs. group pricing
+- Use extras to upsell experiences
+- Hide pricing for quote requests
+- Update pricing rows to match traveler groups
+
+## Next Steps
+
+- [Share proposals with clients](/proposals/sharing)
+- [Customize themes and branding](/proposals/customization)
+- [Create proposals from templates](/proposals/creating-proposals)

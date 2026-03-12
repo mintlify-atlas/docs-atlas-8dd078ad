@@ -1,0 +1,163 @@
+---
+title: 'Organizations Schema'
+description: 'Database schema for organizations, members, invitations, and plan tiers'
+---
+
+## organizations
+
+The main organization table that represents a company or team using Makisala.
+
+<ParamField path="id" type="uuid" required>
+  Unique identifier for the organization (auto-generated)
+</ParamField>
+
+<ParamField path="name" type="text" required>
+  Organization name
+</ParamField>
+
+<ParamField path="slug" type="text" required>
+  Unique URL-friendly identifier for the organization
+</ParamField>
+
+<ParamField path="logoUrl" type="text">
+  URL to the organization's logo image
+</ParamField>
+
+<ParamField path="aboutDescription" type="text">
+  Description about the organization
+</ParamField>
+
+<ParamField path="paymentTerms" type="text">
+  Payment terms and conditions for the organization
+</ParamField>
+
+<ParamField path="notificationEmail" type="text">
+  Email address for receiving notifications
+</ParamField>
+
+<ParamField path="planTier" type="plan_tier" required>
+  Subscription plan tier. Default: `free`
+  
+  **Enum values**: `free`, `starter`, `pro`, `business`
+</ParamField>
+
+<ParamField path="trialEndsAt" type="timestamp">
+  Timestamp when the trial period ends
+</ParamField>
+
+<ParamField path="polarSubscriptionId" type="text">
+  Polar subscription identifier for billing
+</ParamField>
+
+<ParamField path="onboardingCompletedAt" type="timestamp">
+  Timestamp when organization completed onboarding
+</ParamField>
+
+<ParamField path="createdAt" type="timestamp" required>
+  Timestamp when the organization was created (auto-generated)
+</ParamField>
+
+<ParamField path="updatedAt" type="timestamp" required>
+  Timestamp when the organization was last updated (auto-generated)
+</ParamField>
+
+### Relations
+
+- **users**: One-to-many relationship with `user` table
+- **proposals**: One-to-many relationship with `proposals` table
+- **clients**: One-to-many relationship with `clients` table
+- **images**: One-to-many relationship with `organizationImages` table
+- **members**: One-to-many relationship with `member` table
+- **invitations**: One-to-many relationship with `invitation` table
+
+### Indexes
+
+- `idx_organizations_polar_subscription_id` on `polarSubscriptionId`
+- `idx_organizations_trial_ends_at` on `trialEndsAt`
+
+---
+
+## member
+
+Links users to organizations with specific roles (Better Auth organization plugin).
+
+<ParamField path="id" type="text" required>
+  Unique identifier for the membership
+</ParamField>
+
+<ParamField path="userId" type="text" required>
+  Reference to the user ID (cascade delete)
+</ParamField>
+
+<ParamField path="organizationId" type="uuid" required>
+  Reference to the organization ID (cascade delete)
+</ParamField>
+
+<ParamField path="role" type="text" required>
+  Role of the user within the organization. Default: `member`
+</ParamField>
+
+<ParamField path="createdAt" type="timestamp" required>
+  Timestamp when the membership was created (auto-generated)
+</ParamField>
+
+### Relations
+
+- **user**: Many-to-one relationship with `user` table
+- **organization**: Many-to-one relationship with `organizations` table
+
+---
+
+## invitation
+
+Organization invitations for new members (Better Auth organization plugin).
+
+<ParamField path="id" type="text" required>
+  Unique identifier for the invitation
+</ParamField>
+
+<ParamField path="email" type="text" required>
+  Email address of the invitee
+</ParamField>
+
+<ParamField path="inviterId" type="text">
+  Reference to the user who sent the invitation (set null on delete)
+</ParamField>
+
+<ParamField path="organizationId" type="uuid" required>
+  Reference to the organization ID (cascade delete)
+</ParamField>
+
+<ParamField path="role" type="text" required>
+  Role assigned to the invitee. Default: `member`
+</ParamField>
+
+<ParamField path="status" type="text" required>
+  Status of the invitation. Default: `pending`
+</ParamField>
+
+<ParamField path="createdAt" type="timestamp" required>
+  Timestamp when the invitation was created (auto-generated)
+</ParamField>
+
+<ParamField path="expiresAt" type="timestamp" required>
+  Timestamp when the invitation expires
+</ParamField>
+
+### Relations
+
+- **inviter**: Many-to-one relationship with `user` table
+- **organization**: Many-to-one relationship with `organizations` table
+
+---
+
+## PlanTier Enum
+
+Subscription plan tiers available for organizations.
+
+<ResponseField name="plan_tier" type="enum">
+  - `free` - Free tier
+  - `starter` - Starter plan
+  - `pro` - Professional plan
+  - `business` - Business plan
+</ResponseField>

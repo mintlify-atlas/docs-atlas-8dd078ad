@@ -1,0 +1,222 @@
+---
+title: "Proposals Router"
+description: "tRPC procedures for managing tour proposals"
+---
+
+# Proposals Router
+
+The proposals router handles all operations related to creating, managing, and sharing tour proposals with clients.
+
+## Queries
+
+### listForDashboard
+
+Retrieve proposals for the dashboard view, optionally filtered by assignment.
+
+<ParamField query="filter" type="enum" default="mine">
+  Filter mode: `mine` (assigned to current user) or `all` (organization-wide)
+</ParamField>
+
+**Returns:** Array of proposals with client info and assignments
+
+```typescript
+const proposals = await trpc.proposals.listForDashboard.query({
+  filter: 'mine'
+});
+```
+
+### getById
+
+Get complete proposal details including all days, activities, accommodations, and pricing.
+
+<ParamField query="id" type="string" required>
+  Proposal ID
+</ParamField>
+
+**Returns:** Full proposal object or null
+
+```typescript
+const proposal = await trpc.proposals.getById.query({
+  id: 'proposal-uuid'
+});
+```
+
+### getForBuilder
+
+Retrieve proposal data formatted for the proposal builder interface.
+
+<ParamField query="id" type="string" required>
+  Proposal ID
+</ParamField>
+
+**Returns:** Proposal with nested days, accommodations, activities, and meals
+
+```typescript
+const builderData = await trpc.proposals.getForBuilder.query({
+  id: 'proposal-uuid'
+});
+```
+
+## Mutations
+
+### save
+
+Create or update a proposal with all associated data (days, activities, accommodations, pricing).
+
+<ParamField body="id" type="string" required>
+  Proposal ID (generates new UUID if empty)
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  Proposal name
+</ParamField>
+
+<ParamField body="tourId" type="string" required>
+  Associated tour template ID
+</ParamField>
+
+<ParamField body="data" type="object" required>
+  Builder data including theme, days, pricing, and itinerary details
+</ParamField>
+
+<ParamField body="status" type="enum">
+  Status: `draft` or `shared`
+</ParamField>
+
+**Builder Data Structure:**
+
+```typescript
+interface BuilderData {
+  selectedTheme?: string;
+  tourId?: string;
+  clientId?: string | null;
+  tourTitle?: string;
+  tourType?: string | null;
+  heroImage?: string | null;
+  startDate?: string | null;
+  startCity?: string | null;
+  countries?: string[] | null;
+  inclusions?: string[] | null;
+  exclusions?: string[] | null;
+  hidePricing?: boolean;
+  travelerGroups?: Array<{ id: string; count: number; type: string }> | null;
+  pricingRows?: Array<{ id: string; count: number; type: string; unitPrice: number }> | null;
+  extras?: Array<{ id: string; name: string; price: number; selected: boolean }> | null;
+  days?: BuilderDay[];
+}
+```
+
+```typescript
+const result = await trpc.proposals.save.mutate({
+  id: '',
+  name: 'Tanzania Safari Adventure',
+  tourId: 'tour-uuid',
+  data: {
+    selectedTheme: 'minimalistic',
+    clientId: 'client-uuid',
+    startDate: '2026-06-15',
+    days: [
+      {
+        dayNumber: 1,
+        title: 'Arrival in Arusha',
+        description: 'Welcome to Tanzania',
+        activities: [
+          {
+            name: 'Airport Transfer',
+            moment: 'Afternoon',
+            isOptional: false
+          }
+        ],
+        meals: { breakfast: false, lunch: false, dinner: true }
+      }
+    ]
+  },
+  status: 'draft'
+});
+```
+
+### assign
+
+Assign a team member to a proposal (admin only).
+
+<ParamField body="proposalId" type="string" required>
+  Proposal ID
+</ParamField>
+
+<ParamField body="userId" type="string" required>
+  User ID to assign
+</ParamField>
+
+```typescript
+await trpc.proposals.assign.mutate({
+  proposalId: 'proposal-uuid',
+  userId: 'user-uuid'
+});
+```
+
+### unassign
+
+Remove a team member assignment from a proposal (admin only).
+
+<ParamField body="proposalId" type="string" required>
+  Proposal ID
+</ParamField>
+
+<ParamField body="userId" type="string" required>
+  User ID to unassign
+</ParamField>
+
+```typescript
+await trpc.proposals.unassign.mutate({
+  proposalId: 'proposal-uuid',
+  userId: 'user-uuid'
+});
+```
+
+### sendToClient
+
+Send proposal notification email to client.
+
+<ParamField body="proposalId" type="string" required>
+  Proposal ID
+</ParamField>
+
+<ParamField body="message" type="string">
+  Optional custom message (max 5000 characters)
+</ParamField>
+
+```typescript
+await trpc.proposals.sendToClient.mutate({
+  proposalId: 'proposal-uuid',
+  message: 'Looking forward to planning your safari adventure!'
+});
+```
+
+### confirm
+
+Public endpoint for clients to confirm proposal acceptance.
+
+<ParamField body="proposalId" type="string" required>
+  Proposal ID
+</ParamField>
+
+<ParamField body="clientName" type="string" required>
+  Client name (max 255 characters)
+</ParamField>
+
+```typescript
+await trpc.proposals.confirm.mutate({
+  proposalId: 'proposal-uuid',
+  clientName: 'John Smith'
+});
+```
+
+## Authorization
+
+- **Protected procedures**: `listForDashboard`, `getForBuilder`, `save`, `sendToClient` (requires authentication)
+- **Admin procedures**: `assign`, `unassign` (requires admin role)
+- **Public procedures**: `getById`, `confirm` (no authentication required)
+
+## Feature Access
+
+The `save` mutation checks organization plan limits for active proposals. Theme selection is validated against the organization's subscription tier.

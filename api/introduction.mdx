@@ -1,0 +1,279 @@
+---
+title: "API Overview"
+description: "Learn about Makisala's tRPC API architecture and available routers"
+---
+
+## Architecture
+
+Makisala uses [tRPC](https://trpc.io/) to provide end-to-end typesafe APIs between the Next.js frontend and backend. The API is organized into routers that group related functionality.
+
+### tRPC Setup
+
+The tRPC instance is initialized in `/apps/kitasuro/src/server/trpc/init.ts` with:
+
+- **Context Creation**: Lazy session resolution and database access
+- **SuperJSON Transformer**: Automatic serialization of dates, Sets, Maps, and other non-JSON types
+- **Middleware**: Logging middleware for request/response tracking
+- **Procedures**: Public, protected, and admin-level procedures
+
+```typescript
+export async function createContext() {
+  // Lazy session: only resolved when accessed, so public procedures skip the DB hit
+  return { getSession, db };
+}
+
+const t = initTRPC.context<Context>().create({
+  transformer: superjson,
+});
+```
+
+### Procedure Types
+
+#### Public Procedure
+
+Available to all users without authentication:
+
+```typescript
+export const publicProcedure = t.procedure.use(loggerMiddleware);
+```
+
+#### Protected Procedure
+
+Requires authenticated user and resolves the user's organization:
+
+```typescript
+export const protectedProcedure = publicProcedure.use(async ({ ctx, next }) => {
+  const session = await ctx.getSession();
+  if (!session?.user) {
+    throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Not authenticated' });
+  }
+
+  const orgId = await resolveOrgId(
+    session.user.id,
+    session.session?.activeOrganizationId,
+  );
+
+  return next({
+    ctx: { ...ctx, session, user: session.user, orgId },
+  });
+});
+```
+
+#### Admin Procedure
+
+Requires admin role within the organization:
+
+```typescript
+export const adminProcedure = protectedProcedure.use(async ({ ctx, next }) => {
+  const [membership] = await ctx.db
+    .select({ role: member.role })
+    .from(member)
+    .where(and(eq(member.userId, ctx.user.id), eq(member.organizationId, ctx.orgId)))
+    .limit(1);
+
+  if (membership?.role !== 'admin') {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Admin access required' });
+  }
+
+  return next({ ctx });
+});
+```
+
+## Available Routers
+
+The API is organized into the following routers (defined in `/apps/kitasuro/src/server/trpc/router.ts`):
+
+### Core Routers
+
+<CardGroup cols={2}>
+  <Card title="clients" icon="users" href="#clients-router">
+    Client management - create, list, update, and delete client records
+  </Card>
+  
+  <Card title="proposals" icon="file-contract" href="#proposals-router">
+    Tour proposal creation and management with itineraries
+  </Card>
+  
+  <Card title="tours" icon="map" href="#tours-router">
+    Tour template library and cloning functionality
+  </Card>
+  
+  <Card title="nationalParks" icon="tree" href="#nationalparks-router">
+    National park data and day content templates
+  </Card>
+</CardGroup>
+
+### Content & Assets
+
+<CardGroup cols={2}>
+  <Card title="accommodations" icon="hotel" href="#accommodations-router">
+    Accommodation library with images and details
+  </Card>
+  
+  <Card title="activities" icon="hiking" href="#activities-router">
+    Activity library for proposal building
+  </Card>
+  
+  <Card title="contentLibrary" icon="book" href="#contentlibrary-router">
+    Reusable content templates and snippets
+  </Card>
+  
+  <Card title="storage" icon="cloud" href="#storage-router">
+    Image upload and management (Cloudflare R2)
+  </Card>
+</CardGroup>
+
+### Collaboration
+
+<CardGroup cols={2}>
+  <Card title="comments" icon="comments" href="#comments-router">
+    Proposal feedback and comment threads
+  </Card>
+  
+  <Card title="notes" icon="note-sticky" href="#notes-router">
+    Internal team notes on proposals
+  </Card>
+</CardGroup>
+
+### Settings
+
+<CardGroup cols={2}>
+  <Card title="settings" icon="gear" href="#settings-router">
+    Organization settings and team management
+  </Card>
+  
+  <Card title="onboarding" icon="flag" href="#onboarding-router">
+    New user and organization onboarding flow
+  </Card>
+</CardGroup>
+
+## Example Router
+
+Here's a simplified example from the clients router:
+
+```typescript
+import { z } from 'zod';
+import { clients } from '@repo/db/schema';
+import { router, protectedProcedure } from '../init';
+
+export const clientsRouter = router({
+  list: protectedProcedure
+    .input(
+      z.object({
+        query: z.string().max(100).optional(),
+        page: z.number().int().positive().default(1),
+        limit: z.number().int().positive().max(100).default(10),
+      }).optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      const page = input?.page ?? 1;
+      const limit = input?.limit ?? 10;
+      const offset = (page - 1) * limit;
+
+      const data = await ctx.db
+        .select()
+        .from(clients)
+        .where(eq(clients.organizationId, ctx.orgId))
+        .limit(limit + 1)
+        .offset(offset)
+        .orderBy(desc(clients.createdAt));
+
+      return {
+        clients: data.slice(0, limit),
+        pagination: { page, limit, hasNextPage: data.length > limit },
+      };
+    }),
+
+  create: protectedProcedure
+    .input(
+      z.object({
+        name: z.string().min(1).max(255),
+        email: z.string().email().max(255).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const [newClient] = await ctx.db
+        .insert(clients)
+        .values({
+          organizationId: ctx.orgId,
+          ...input,
+        })
+        .returning();
+
+      return { id: newClient.id };
+    }),
+});
+```
+
+## Client Usage
+
+On the frontend, use the tRPC React Query hooks:
+
+```typescript
+import { trpc } from '@/lib/trpc';
+
+function ClientList() {
+  const { data, isLoading } = trpc.clients.list.useQuery({
+    page: 1,
+    limit: 10,
+  });
+
+  const createClient = trpc.clients.create.useMutation({
+    onSuccess: () => {
+      // Invalidate and refetch
+      utils.clients.list.invalidate();
+    },
+  });
+
+  // Use the data...
+}
+```
+
+## API Endpoint
+
+The tRPC API is exposed via Next.js App Router at:
+
+```
+POST /api/trpc/[procedure]
+GET  /api/trpc/[procedure]
+```
+
+Route handler location: `/apps/kitasuro/src/app/api/trpc/[trpc]/route.ts`
+
+```typescript
+import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
+import { createContext } from '@/server/trpc/init';
+import { appRouter } from '@/server/trpc/router';
+
+function handler(req: Request) {
+  return fetchRequestHandler({
+    endpoint: '/api/trpc',
+    req,
+    router: appRouter,
+    createContext,
+  });
+}
+
+export { handler as GET, handler as POST };
+```
+
+## Type Safety
+
+Export the router type for full type safety on the client:
+
+```typescript
+// Server
+export type AppRouter = typeof appRouter;
+
+// Client
+import type { AppRouter } from '@/server/trpc/router';
+import { createTRPCReact } from '@trpc/react-query';
+
+export const trpc = createTRPCReact<AppRouter>();
+```
+
+This provides:
+- Autocompletion for all procedures
+- Type inference for inputs and outputs
+- Compile-time errors for invalid API calls
+- No need to manually sync types between frontend and backend

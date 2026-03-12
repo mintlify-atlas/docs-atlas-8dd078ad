@@ -1,0 +1,287 @@
+---
+title: Monorepo Structure
+description: Understanding the workspace architecture and package organization
+---
+
+Makisala is built as a monorepo using **npm workspaces** to manage multiple applications and shared packages in a single repository.
+
+## Workspace Configuration
+
+The root `package.json` defines three workspace patterns:
+
+```json
+{
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "tooling/*"
+  ]
+}
+```
+
+## Directory Structure
+
+```
+makisala/
+├── apps/
+│   ├── kitasuro/          # Main SaaS application
+│   └── makisala/          # Marketing website
+├── packages/
+│   ├── db/                # Shared database layer
+│   ├── ui/                # Shared UI components
+│   └── resend/            # Email service wrapper
+├── tooling/
+│   ├── configure-typescript/
+│   └── configure-eslint/
+└── package.json           # Root workspace config
+```
+
+## Applications
+
+### kitasuro
+
+The main SaaS application for safari tour operators to create proposals and manage clients.
+
+**Key Features:**
+- Tour proposal builder
+- Client management
+- Team collaboration
+- Authentication with passkeys
+- Multi-tenant organizations
+
+**Technology:**
+- Next.js 16.1.0
+- React 19.0.1
+- tRPC v11
+- Better Auth with passkey support
+- Cloudinary for image management
+- AWS S3 for file storage
+- Polar.sh for billing
+
+**Package Name:** `kitasuro`
+
+**Runtime:** Bun
+
+### makisala
+
+The public-facing marketing website.
+
+**Key Features:**
+- Landing pages
+- Blog posts
+- Lead generation forms
+- MDX content rendering
+
+**Technology:**
+- Next.js 16.1.0
+- React 19.0.1
+- Better Auth 1.4.2
+- MDX support
+
+**Package Name:** `makisala-website`
+
+**Runtime:** Bun
+
+## Shared Packages
+
+### @repo/db
+
+Centralized database layer providing schema definitions and database connection.
+
+**Exports:**
+```typescript
+import { db } from '@repo/db'
+import { organizations, clients, proposals } from '@repo/db/schema'
+```
+
+**Key Technologies:**
+- Drizzle ORM 0.44.3
+- PostgreSQL via `postgres` package
+- Drizzle Kit for migrations
+- Zod for schema validation
+
+**Scripts:**
+- `generate` - Generate migrations from schema
+- `migrate` - Run migrations
+- `push` - Push schema changes directly
+- `studio` - Launch Drizzle Studio
+
+### @repo/ui
+
+Shared UI component library built on Radix UI primitives.
+
+**Exports:**
+```typescript
+import { Button, Dialog, Select } from '@repo/ui'
+import { useToast, useDebounce } from '@repo/ui'
+```
+
+**Components Include:**
+- Form controls (Button, Input, Select, Checkbox, etc.)
+- Overlays (Dialog, Popover, Tooltip)
+- Navigation (Tabs, Accordion, NavigationMenu)
+- Feedback (Toast notifications)
+- Maps (MapLibre GL integration)
+- Country flags
+
+**Styling:**
+- Tailwind CSS 4
+- Radix UI for accessible primitives
+- class-variance-authority for variant management
+
+### @repo/resend
+
+Email service wrapper for transactional emails.
+
+**Exports:**
+```typescript
+import { sendEmailVerificationEmail, sendTeamInvitationEmail } from '@repo/resend'
+```
+
+**Technology:**
+- Resend API v4.0.0
+- Environment variable configuration
+- Typed email templates
+
+## Tooling Packages
+
+### @repo/tsconfig
+
+Shared TypeScript configuration base.
+
+**Usage:**
+```json
+{
+  "extends": "@repo/tsconfig/base.json"
+}
+```
+
+### @repo/lint
+
+Shared ESLint configuration.
+
+**Usage:**
+```json
+{
+  "extends": "@repo/lint"
+}
+```
+
+## Dependency Management
+
+### Workspace Protocol
+
+Internal packages use the `workspace:*` protocol to reference each other:
+
+```json
+{
+  "dependencies": {
+    "@repo/db": "workspace:*",
+    "@repo/ui": "workspace:*",
+    "@repo/resend": "workspace:*"
+  }
+}
+```
+
+This ensures:
+- Always using the local version
+- Proper symlink resolution
+- Version consistency
+
+### Hoisted Dependencies
+
+Common dependencies are hoisted to the root `node_modules`:
+- `react` and `react-dom` (v19)
+- `next` (v16.1.0)
+- `typescript` (v5)
+- `tailwind-merge`
+- `zod`
+- `lucide-react`
+
+### Package-Specific Dependencies
+
+Each workspace maintains its own specific dependencies:
+- `kitasuro` has tRPC, Better Auth plugins, AWS SDK
+- `makisala` has MDX rendering packages
+- `@repo/db` has Drizzle and database drivers
+- `@repo/ui` has Radix UI components
+
+## Development Workflow
+
+### Installing Dependencies
+
+Run from the root to install all workspaces:
+
+```bash
+npm install
+```
+
+### Running Applications
+
+Navigate to the specific app directory:
+
+```bash
+cd apps/kitasuro
+bun dev
+```
+
+Or use workspace commands from root:
+
+```bash
+npm -w kitasuro run dev
+```
+
+### Working with Packages
+
+Changes to shared packages are immediately reflected in consuming apps thanks to workspace symlinks.
+
+**Database Schema Changes:**
+
+```bash
+cd packages/db
+bun run generate  # Generate migrations
+bun run push      # Push to database
+```
+
+**UI Component Changes:**
+
+Simply edit files in `packages/ui/src/` - they hot-reload in consuming apps.
+
+## Benefits of Monorepo Structure
+
+1. **Code Sharing** - Reuse database schema, UI components, and utilities
+2. **Type Safety** - TypeScript types flow across package boundaries
+3. **Atomic Changes** - Update multiple packages in a single commit
+4. **Simplified Dependency Management** - Single lock file, consistent versions
+5. **Better Collaboration** - See the full context of changes
+6. **Faster Development** - No need to publish packages between changes
+
+## Package Dependencies Graph
+
+```
+apps/kitasuro
+  ├─> @repo/db
+  ├─> @repo/ui
+  ├─> @repo/resend
+  ├─> @repo/tsconfig
+  └─> @repo/lint
+
+apps/makisala
+  ├─> @repo/db
+  ├─> @repo/ui
+  ├─> @repo/resend
+  ├─> @repo/tsconfig
+  └─> @repo/lint
+
+@repo/db
+  ├─> @repo/tsconfig
+  └─> @repo/lint
+
+@repo/ui
+  ├─> @repo/tsconfig
+  └─> @repo/lint
+
+@repo/resend
+  ├─> @repo/tsconfig
+  └─> @repo/lint
+```

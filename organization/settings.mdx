@@ -1,0 +1,172 @@
+---
+title: Organization Settings
+description: Configure your organization's branding, notifications, and preferences
+---
+
+## Accessing Settings
+
+Navigate to **Settings** from the main navigation menu. Organization admins have access to all settings, while members can view certain sections.
+
+## General Settings
+
+### Organization Name
+
+Your organization's display name appears:
+- In the organization selector
+- On proposals you create
+- In team invitation emails
+
+To update your organization name:
+
+1. Go to **Settings** > **General**
+2. Update the **Organization Name** field
+3. Click **Save Changes**
+
+<Note>
+  Changing the organization name does not affect your unique slug or URL.
+</Note>
+
+### Organization Slug
+
+The slug is a unique, URL-safe identifier for your organization:
+
+- Automatically generated when the organization is created
+- Used in API calls and internal references
+- Cannot be changed after creation
+
+## Branding
+
+### Logo
+
+Upload your agency's logo to personalize proposals:
+
+1. Navigate to **Settings** > **Branding**
+2. Click **Upload Logo**
+3. Select an image file (PNG, JPG, or SVG)
+4. Your logo appears on all proposals
+
+**Logo Guidelines:**
+- Recommended size: 200x200px or larger
+- Supported formats: PNG, JPG, SVG
+- Maximum file size: 5MB
+- Transparent backgrounds work best
+
+### About Description
+
+Add a description of your travel agency:
+
+- Appears on proposal cover pages
+- Helps clients learn about your company
+- Supports plain text (no formatting)
+
+Example:
+> "Safari Adventures is a premier travel agency specializing in African safaris and adventure tours. With over 20 years of experience, we create unforgettable journeys across Tanzania, Kenya, and South Africa."
+
+### Payment Terms
+
+Define your payment terms to automatically include in proposals:
+
+- Deposit requirements
+- Payment schedules
+- Cancellation policies
+- Accepted payment methods
+
+Example:
+> "50% deposit required upon booking. Balance due 30 days before departure. Payments accepted via bank transfer or credit card. Cancellations within 14 days of departure are non-refundable."
+
+## Notification Settings
+
+### Notification Email
+
+<Warning>
+  Setting a notification email is required during onboarding and for receiving important updates.
+</Warning>
+
+This email receives notifications for:
+- New proposal views by clients
+- Team member invitations sent
+- Subscription and billing updates
+- Important product announcements
+
+To configure:
+
+1. Go to **Settings** > **Notifications**
+2. Enter your preferred email address
+3. Click **Save**
+
+<Tip>
+  Use a shared team email (like proposals@youragency.com) so multiple team members can stay informed.
+</Tip>
+
+### Email Preferences
+
+Customize which notifications you receive:
+
+- **Proposal Activity**: Client views, comments, and shares
+- **Team Updates**: New members, role changes
+- **Billing**: Subscription renewals, payment failures
+- **Product Updates**: New features and improvements
+
+## Data & Privacy
+
+### Organization Data Export
+
+Admins can export all organization data:
+
+1. Navigate to **Settings** > **Data**
+2. Click **Export Data**
+3. Receive a download link via email
+
+Exported data includes:
+- All proposals (JSON format)
+- Client list (CSV)
+- Team members (CSV)
+- Organization settings (JSON)
+
+### Delete Organization
+
+<Warning>
+  Deleting your organization is permanent and cannot be undone. All proposals, clients, images, and data will be permanently deleted.
+</Warning>
+
+Only organization admins can delete the organization:
+
+1. Go to **Settings** > **Danger Zone**
+2. Click **Delete Organization**
+3. Type your organization name to confirm
+4. Click **Permanently Delete**
+
+Before deleting:
+- Export your data for records
+- Cancel any active subscriptions
+- Notify team members
+- Download important proposals
+
+## Organization Switching
+
+If you belong to multiple organizations:
+
+- Use the organization selector in the navigation bar
+- Your active organization is saved in your session
+- All data (proposals, clients, tours) is specific to the active organization
+- Switching organizations updates your view instantly
+
+## Advanced Settings
+
+### API Access
+
+<Info>
+  API access is available on Pro and Business plans. Contact support to enable API access for your organization.
+</Info>
+
+### Webhooks
+
+Configure webhooks to receive real-time updates:
+
+- Proposal created/updated events
+- Client activity notifications
+- Team member changes
+
+<Note>
+  Webhook configuration is available on Business plans. See the [API Documentation](/api/webhooks) for setup instructions.
+</Note>

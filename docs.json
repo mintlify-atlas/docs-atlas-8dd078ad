@@ -1,122 +1,139 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Makisala",
+  "theme": "almond",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#f6f0e8",
+    "light": "#7c7474",
+    "dark": "#080808"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "https://media.brand.dev/638b4ea5-0131-4ccf-a5ce-1a9a097651f0.jpg",
+  "logo": {
+    "light": "https://media.brand.dev/adb46c6d-f912-4de9-a950-3120d1745388.png",
+    "dark": "https://media.brand.dev/adb46c6d-f912-4de9-a950-3120d1745388.png"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/brightonmboya/makisala"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/brightonmboya/makisala"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
-              "quickstart",
-              "development"
+              "introduction",
+              "quickstart"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Core Features",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "features/proposals",
+              "features/tours",
+              "features/clients",
+              "features/content-library",
+              "features/collaboration"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Tour Management",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "tours/creating-tours",
+              "tours/itineraries",
+              "tours/accommodations",
+              "tours/activities"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Proposal Builder",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "proposals/creating-proposals",
+              "proposals/customization",
+              "proposals/pricing",
+              "proposals/sharing"
+            ]
+          },
+          {
+            "group": "Organization & Teams",
+            "pages": [
+              "organization/setup",
+              "organization/team-management",
+              "organization/settings",
+              "organization/billing"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Overview",
             "pages": [
-              "api-reference/introduction"
+              "api/introduction",
+              "api/authentication"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Database Schema",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/schema/organizations",
+              "api/schema/proposals",
+              "api/schema/tours",
+              "api/schema/clients"
+            ]
+          },
+          {
+            "group": "tRPC Routers",
+            "pages": [
+              "api/routers/proposals",
+              "api/routers/tours",
+              "api/routers/clients",
+              "api/routers/accommodations",
+              "api/routers/activities"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Development",
+        "groups": [
+          {
+            "group": "Setup",
+            "pages": [
+              "development/installation",
+              "development/environment",
+              "development/database"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": [
+              "development/monorepo",
+              "development/tech-stack",
+              "development/authentication"
+            ]
+          },
+          {
+            "group": "Guides",
+            "pages": [
+              "development/contributing",
+              "development/testing",
+              "development/deployment"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

@@ -1,0 +1,356 @@
+---
+title: Tour Templates
+description: Build a library of reusable tour templates to speed up proposal creation
+icon: 'map'
+---
+
+## Overview
+
+Tour templates are reusable itineraries that serve as the foundation for client proposals. Build your library once, then customize for each client.
+
+<Info>
+  Tours can be organization-specific or shared globally across all Makisala users as templates.
+</Info>
+
+## Creating Tours
+
+### Basic Information
+
+Every tour includes essential metadata:
+
+```typescript schema.ts:378-397
+{
+  tourName: "7-Day Tanzania Safari",
+  overview: "Experience the best of Tanzania's wildlife...",
+  pricing: "5500.00",
+  country: "Tanzania",
+  number_of_days: 7,
+  img_url: "https://...",
+  tags: ["wildlife", "safari", "luxury", "family-friendly"]
+}
+```
+
+<ParamField path="tourName" type="string" required>
+  The name of your tour template
+</ParamField>
+
+<ParamField path="overview" type="string" required>
+  Detailed description of the tour experience
+</ParamField>
+
+<ParamField path="pricing" type="decimal" required>
+  Base price for the tour (stored with 2 decimal precision)
+</ParamField>
+
+<ParamField path="country" type="string" required>
+  Primary destination country
+</ParamField>
+
+<ParamField path="number_of_days" type="integer" required>
+  Total duration of the tour
+</ParamField>
+
+<ParamField path="tags" type="array">
+  Categorize tours for easy filtering (max 20 tags, 100 chars each)
+</ParamField>
+
+## Itinerary Days
+
+Build day-by-day itineraries for your tours.
+
+### Day Structure
+
+```typescript schema.ts:414-424
+{
+  dayNumber: 1,
+  dayTitle: "Arrival in Arusha",
+  overview: "Welcome to Tanzania! Upon arrival...",
+  national_park_id: "uuid-of-park"
+}
+```
+
+<Note>
+  Day numbers must be sequential starting from 1. The system validates this on update.
+</Note>
+
+### Accommodations
+
+Link accommodations to each day:
+
+```typescript schema.ts:479-487
+// Join table: itineraryAccommodations
+{
+  itineraryDayId: "day-uuid",
+  accommodationId: "accommodation-uuid"
+}
+```
+
+Accommodations come from your content library and include:
+- Photos and descriptions
+- Location coordinates
+- Amenities and room types
+- AI-enhanced descriptions
+
+## Managing Tours
+
+### List Tours
+
+Retrieve all tours for your organization:
+
+```typescript tours.ts:13-28
+const tours = await trpc.tours.list();
+// Returns: id, name, days, imageUrl, overview, country, pricing, tags
+```
+
+### Update Tours
+
+Modify tour details and itineraries:
+
+```typescript tours.ts:96-184
+await trpc.tours.update({
+  id: "tour-uuid",
+  tourName: "Updated Tour Name",
+  overview: "New description",
+  pricing: "6500.00",
+  tags: ["luxury", "private"],
+  itineraries: [
+    {
+      dayNumber: 1,
+      title: "Arrival Day",
+      overview: "First day activities",
+      national_park_id: "park-uuid",
+      accommodation_id: "hotel-uuid"
+    }
+    // ... more days
+  ]
+});
+```
+
+<Warning>
+  Updating itineraries replaces all existing days. Make sure to include the complete itinerary in your update.
+</Warning>
+
+### Validation Rules
+
+The system enforces strict validation:
+
+1. **No Duplicate Days**: Each day number must be unique
+2. **Sequential Numbering**: Days must be numbered 1, 2, 3... without gaps
+3. **Positive Integers**: Day numbers must be positive integers
+
+```typescript tours.ts:133-149
+// These validations happen automatically
+if (uniqueDayNumbers.size !== dayNumbers.length) {
+  throw new Error('Duplicate day numbers not allowed');
+}
+
+if (!isSequential) {
+  throw new Error('Day numbers must be sequential');
+}
+```
+
+### Delete Tours
+
+```typescript tours.ts:186-200
+await trpc.tours.delete({ id: "tour-uuid" });
+```
+
+<Warning>
+  Deleting a tour will cascade delete all associated itinerary days and accommodations. Existing proposals based on this tour will NOT be affected.
+</Warning>
+
+## Shared Templates
+
+### Browse Global Templates
+
+Access curated tour templates shared across all Makisala users:
+
+```typescript tours.ts:225-240
+const templates = await trpc.tours.getSharedTemplates();
+// Returns up to 100 global templates
+```
+
+Shared templates have `organizationId: null` in the database.
+
+### Clone Templates
+
+Create a copy of any template for your organization:
+
+```typescript tours.ts:242-316
+const result = await trpc.tours.cloneTemplate({
+  templateId: "template-uuid"
+});
+
+// Returns: { success: true, tourId: "new-tour-uuid" }
+```
+
+Cloning copies:
+- ✅ All tour metadata
+- ✅ Complete itinerary (all days)
+- ✅ Accommodation assignments
+- ✅ Activities and features
+- ✅ Reference to original via `clonedFromId`
+
+<Tip>
+  Cloned tours are fully independent. Changes to the original template won't affect your copy.
+</Tip>
+
+## Day Content Templates
+
+Use AI-generated day descriptions for faster itinerary building.
+
+### Request Random Template
+
+```typescript tours.ts:318-353
+const template = await trpc.tours.getRandomDayTemplate({
+  nationalParkId: "serengeti-uuid",
+  dayType: "full_day", // arrival, full_day, half_day, departure
+  excludeDescriptions: ["Previous day description..."] // Avoid duplicates
+});
+```
+
+Day types help generate appropriate content:
+- **arrival**: Welcome and orientation focused
+- **full_day**: Full safari experience
+- **half_day**: Shorter activities
+- **departure**: Wrap-up and travel
+
+Source: `/workspace/source/packages/db/src/schema.ts:988-1000`
+
+## Advanced Features
+
+### Top Features & Activities
+
+Highlight tour selling points:
+
+```typescript schema.ts:387-388
+activities: [
+  { title: "Game Drives", activity_name: "Daily safari drives" },
+  { title: "Bush Walks", activity_name: "Guided nature walks" }
+],
+topFeatures: [
+  { title: "Big Five", description: "See lions, elephants, buffalo, leopards, and rhinos" },
+  { title: "Migration", description: "Witness the great wildebeest migration" }
+]
+```
+
+### Source Tracking
+
+Track where tour content originated:
+
+```typescript schema.ts:385
+sourceUrl: "https://example.com/original-tour" // Optional
+```
+
+### Clone Relationships
+
+```typescript schema.ts:394
+clonedFromId: "original-tour-uuid" // References the template
+```
+
+## Integration with Proposals
+
+Tours serve as templates for proposals.
+
+### Get Tour for Proposal
+
+```typescript tours.ts:60-94
+const tourDetails = await trpc.tours.getDetails({ id: "tour-uuid" });
+
+// Returns structured data ready for proposal builder:
+{
+  tourType: "Private Tour",
+  price: "5500.00",
+  country: "Tanzania",
+  days: [
+    {
+      id: "day-uuid",
+      dayNumber: 1,
+      destination: "park-uuid",
+      accommodation: "accommodation-uuid",
+      activities: [],
+      meals: { breakfast: true, lunch: true, dinner: true }
+    }
+  ],
+  selectedTheme: "minimalistic"
+}
+```
+
+### Combined Tours & Clients Query
+
+For the proposal builder, fetch both at once:
+
+```typescript tours.ts:202-223
+const { tours, clients } = await trpc.tours.getToursAndClients();
+```
+
+## Media Management
+
+### Page Images
+
+Retrieve featured images for multiple national parks:
+
+```typescript tours.ts:355-365
+const images = await trpc.tours.getPageImages({
+  pageIds: ["page-1", "page-2", "page-3"]
+});
+// Returns: id and featured_image_url for each page
+```
+
+Useful for displaying park photos in your itineraries.
+
+## Data Model
+
+Key tables from `/workspace/source/packages/db/src/schema.ts`:
+
+- **tours** (378-397): Main tour metadata and settings
+- **itineraryDays** (414-424): Day-by-day structure
+- **itineraryAccommodations** (479-487): Links days to accommodations
+- **dayContentTemplates** (990-1000): AI-generated day descriptions
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Organize with Tags" icon="tags">
+    Use consistent tags (e.g., "wildlife", "beach", "luxury") to categorize tours for easy filtering.
+  </Card>
+  
+  <Card title="Detailed Overviews" icon="align-left">
+    Write compelling tour overviews that can be reused in proposals with minimal editing.
+  </Card>
+  
+  <Card title="Clone, Don't Duplicate" icon="clone">
+    Use the clone feature to create similar tours instead of manually copying details.
+  </Card>
+  
+  <Card title="Link National Parks" icon="tree">
+    Connect days to national parks to leverage location data and curated content.
+  </Card>
+</CardGroup>
+
+## Limitations
+
+<Info>
+  **Validation Constraints**
+  - Maximum 60 days per tour
+  - Maximum 20 tags per tour
+  - Tag length: 100 characters
+  - Tour name: 255 characters
+  - Overview: 5000 characters
+</Info>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Create Proposals" icon="file-text" href="/features/proposals">
+    Turn your tours into client-ready proposals
+  </Card>
+  
+  <Card title="Content Library" icon="images" href="/features/content-library">
+    Add accommodations and photos to your tours
+  </Card>
+  
+  <Card title="National Parks" icon="tree" href="/api/introduction">
+    Learn about destination and park data
+  </Card>
+</CardGroup>

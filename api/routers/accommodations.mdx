@@ -1,0 +1,251 @@
+---
+title: "Accommodations Router"
+description: "tRPC procedures for managing accommodation properties"
+---
+
+# Accommodations Router
+
+The accommodations router handles lodging properties, including hotels, lodges, and camps.
+
+## Queries
+
+### list
+
+Retrieve paginated list of accommodations with images.
+
+<ParamField query="query" type="string">
+  Search query for accommodation names
+</ParamField>
+
+<ParamField query="page" type="number" default="1">
+  Page number (positive integer)
+</ParamField>
+
+<ParamField query="limit" type="number" default="10">
+  Results per page (max 100)
+</ParamField>
+
+**Returns:** Object with `accommodations` array and `pagination` metadata
+
+```typescript
+const result = await trpc.accommodations.list.query({
+  query: 'serengeti',
+  page: 1,
+  limit: 20
+});
+
+// Returns:
+// {
+//   accommodations: [
+//     {
+//       id: 'acc-uuid',
+//       name: 'Serengeti Lodge',
+//       overview: 'Luxury lodge...',
+//       images: [...]
+//     }
+//   ],
+//   pagination: {
+//     page: 1,
+//     limit: 20,
+//     total: 45,
+//     totalPages: 3
+//   }
+// }
+```
+
+### getById
+
+Get complete accommodation details with all images.
+
+<ParamField query="id" type="string" required>
+  Accommodation ID
+</ParamField>
+
+**Returns:** Accommodation object with images or null
+
+```typescript
+const accommodation = await trpc.accommodations.getById.query({
+  id: 'acc-uuid'
+});
+```
+
+### getLookup
+
+Lightweight accommodation lookup with first image only (optimized for itinerary builder).
+
+<ParamField query="id" type="string" required>
+  Accommodation ID
+</ParamField>
+
+**Returns:** Accommodation object with single image or null
+
+```typescript
+const accommodation = await trpc.accommodations.getLookup.query({
+  id: 'acc-uuid'
+});
+```
+
+### search
+
+Search accommodations by name (optimized for autocomplete).
+
+<ParamField query="query" type="string" default="">
+  Search query
+</ParamField>
+
+<ParamField query="limit" type="number" default="20">
+  Maximum results (max 100)
+</ParamField>
+
+**Returns:** Array of accommodations with first image
+
+```typescript
+const results = await trpc.accommodations.search.query({
+  query: 'four seasons',
+  limit: 10
+});
+```
+
+### getAll
+
+Retrieve all accommodations with public image URLs.
+
+**Returns:** Array of all accommodations with resolved image URLs
+
+```typescript
+const allAccommodations = await trpc.accommodations.getAll.query();
+```
+
+## Mutations
+
+### create
+
+Create a new accommodation property.
+
+<ParamField body="name" type="string" required>
+  Accommodation name (min 1, max 255 characters)
+</ParamField>
+
+<ParamField body="url" type="string">
+  Website URL (must be valid URL or empty string)
+</ParamField>
+
+<ParamField body="overview" type="string">
+  Brief overview (max 1000 characters)
+</ParamField>
+
+<ParamField body="description" type="string">
+  Detailed description (max 5000 characters)
+</ParamField>
+
+<ParamField body="enhancedDescription" type="string">
+  Enhanced description with additional details (max 10000 characters)
+</ParamField>
+
+<ParamField body="latitude" type="string">
+  GPS latitude
+</ParamField>
+
+<ParamField body="longitude" type="string">
+  GPS longitude
+</ParamField>
+
+<ParamField body="images" type="array">
+  Array of uploaded image objects (max 20)
+</ParamField>
+
+**Image Object Structure:**
+
+```typescript
+interface UploadedImage {
+  key: string;    // S3 object key
+  bucket: string; // S3 bucket name
+}
+```
+
+```typescript
+const result = await trpc.accommodations.create.mutate({
+  name: 'Serengeti Four Seasons Safari Lodge',
+  url: 'https://www.fourseasons.com/serengeti/',
+  overview: 'Luxury lodge overlooking the Serengeti plains',
+  description: 'Experience unparalleled comfort and wildlife viewing...',
+  latitude: '-2.333333',
+  longitude: '34.833333',
+  images: [
+    { bucket: 'makisala-prod', key: 'accommodations/lodge-main.jpg' },
+    { bucket: 'makisala-prod', key: 'accommodations/lodge-pool.jpg' }
+  ]
+});
+
+// Returns: { id: 'new-acc-uuid' }
+```
+
+### update
+
+Update an existing accommodation property.
+
+<ParamField body="id" type="string" required>
+  Accommodation ID
+</ParamField>
+
+<ParamField body="name" type="string" required>
+  Accommodation name (min 1, max 255 characters)
+</ParamField>
+
+<ParamField body="url" type="string">
+  Website URL
+</ParamField>
+
+<ParamField body="overview" type="string">
+  Brief overview (max 1000 characters)
+</ParamField>
+
+<ParamField body="description" type="string">
+  Detailed description (max 5000 characters)
+</ParamField>
+
+<ParamField body="enhancedDescription" type="string">
+  Enhanced description (max 10000 characters)
+</ParamField>
+
+<ParamField body="latitude" type="string">
+  GPS latitude
+</ParamField>
+
+<ParamField body="longitude" type="string">
+  GPS longitude
+</ParamField>
+
+<ParamField body="newImages" type="array">
+  Array of new images to add (max 20)
+</ParamField>
+
+<ParamField body="removedImageIds" type="array">
+  Array of image IDs to remove (max 50)
+</ParamField>
+
+```typescript
+await trpc.accommodations.update.mutate({
+  id: 'acc-uuid',
+  name: 'Serengeti Four Seasons Safari Lodge',
+  overview: 'Updated overview text',
+  newImages: [
+    { bucket: 'makisala-prod', key: 'accommodations/new-image.jpg' }
+  ],
+  removedImageIds: ['img-uuid-1', 'img-uuid-2']
+});
+
+// Returns: { success: true }
+```
+
+## Authorization
+
+- **Public procedures**: `list`, `getById`, `getLookup`, `search`, `getAll` (no authentication required)
+- **Protected procedures**: `create`, `update` (requires authentication)
+
+## Image Management
+
+- Images are stored in S3 and referenced by bucket/key
+- `getAll` query resolves images to public URLs
+- Maximum 20 images per accommodation
+- Images can be added/removed during updates

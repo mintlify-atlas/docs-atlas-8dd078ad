@@ -1,0 +1,104 @@
+---
+title: "Activities Router"
+description: "tRPC procedures for managing activity library"
+---
+
+# Activities Router
+
+The activities router manages the library of safari activities that can be added to itineraries.
+
+## Queries
+
+### search
+
+Search activities by name from the global library and organization-specific activities.
+
+<ParamField query="query" type="string" default="">
+  Search query for activity names
+</ParamField>
+
+<ParamField query="limit" type="number" default="10">
+  Maximum number of results (max 100)
+</ParamField>
+
+**Returns:** Array of activities with `id` and `name`
+
+```typescript
+const activities = await trpc.activities.search.query({
+  query: 'game drive',
+  limit: 20
+});
+
+// Returns:
+// [
+//   { id: 'activity-uuid-1', name: 'Morning Game Drive' },
+//   { id: 'activity-uuid-2', name: 'Evening Game Drive' },
+//   { id: 'activity-uuid-3', name: 'Full Day Game Drive' }
+// ]
+```
+
+## Mutations
+
+### create
+
+Create a new custom activity for your organization.
+
+<ParamField body="name" type="string" required>
+  Activity name (min 1, max 255 characters)
+</ParamField>
+
+**Returns:** Object with new activity `id` and `name`
+
+```typescript
+const activity = await trpc.activities.create.mutate({
+  name: 'Hot Air Balloon Safari'
+});
+
+// Returns:
+// {
+//   id: 'new-activity-uuid',
+//   name: 'Hot Air Balloon Safari'
+// }
+```
+
+## Authorization
+
+All procedures require authentication and validate organization membership.
+
+## Activity Library Structure
+
+Activities can be:
+- **Global activities**: Available to all organizations (e.g., standard safari activities)
+- **Organization-specific**: Custom activities created by your organization
+
+The search query returns both types, allowing you to use predefined activities or create custom ones for your unique tour offerings.
+
+## Usage in Proposals
+
+Activities from this library are referenced when building proposal itineraries. Each activity can be assigned to specific days with additional properties:
+
+```typescript
+interface ProposalActivity {
+  name: string;           // From activity library
+  description?: string;   // Custom description for this proposal
+  location?: string;      // Where the activity takes place
+  moment?: string;        // Time of day (e.g., 'Morning', 'Full Day')
+  isOptional?: boolean;   // Whether the activity is optional
+  imageUrl?: string;      // Custom image for this activity instance
+}
+```
+
+## Common Activities
+
+Examples of activities typically found in the library:
+
+- Game Drives (morning, afternoon, full day)
+- Walking Safaris
+- Bird Watching
+- Cultural Village Visits
+- Hot Air Balloon Rides
+- Night Drives
+- Bush Dinners
+- Photography Workshops
+- Sundowner Drinks
+- Boat Safaris

@@ -1,0 +1,288 @@
+---
+title: Proposal Management
+description: Create, customize, and share beautiful travel proposals with clients
+icon: 'file-text'
+---
+
+## Overview
+
+Makisala's proposal management system allows you to transform tour templates into customized, client-ready proposals. Build detailed itineraries, manage pricing, and collaborate with your team—all in one place.
+
+## Creating Proposals
+
+Proposals are created from tour templates and can be fully customized for each client.
+
+### Basic Information
+
+<CodeGroup>
+```typescript proposals.ts
+// Creating a new proposal from a tour
+const proposal = {
+  name: "Tanzania Safari - Smith Family",
+  tourId: "tour-uuid",
+  clientId: "client-uuid",
+  tourTitle: "7-Day Tanzania Safari Adventure",
+  tourType: "Private Tour",
+  status: "draft" // or "shared"
+};
+```
+</CodeGroup>
+
+Each proposal includes:
+- **Name**: Internal reference for your team
+- **Tour Title**: Client-facing title
+- **Client**: Link to client record for contact management
+- **Status**: Draft (internal) or Shared (sent to client)
+
+## Itinerary Builder
+
+Build detailed day-by-day itineraries with rich content.
+
+### Day Structure
+
+Each day in your proposal includes:
+
+<AccordionGroup>
+  <Accordion title="Destinations" icon="map-pin">
+    Link days to national parks or custom destinations with GPS coordinates for map visualization.
+    
+    ```typescript
+    {
+      nationalParkId: "serengeti-uuid",
+      destinationName: "Serengeti National Park",
+      destinationLat: -2.3333,
+      destinationLng: 34.8333
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Accommodations" icon="hotel">
+    Select from your content library of lodges, camps, and hotels. Each accommodation includes photos, amenities, and descriptions.
+    
+    Referenced from `/workspace/source/packages/db/src/schema.ts:433-450`
+  </Accordion>
+
+  <Accordion title="Activities" icon="compass">
+    Add activities with timing, descriptions, and optional flags:
+    
+    ```typescript
+    {
+      name: "Game Drive",
+      description: "Morning safari in the Serengeti",
+      location: "Seronera Valley",
+      moment: "Morning", // Morning, Afternoon, Evening, Full Day, Half Day, Night
+      isOptional: false,
+      imageUrl: "https://..."
+    }
+    ```
+    
+    Activities support 6 time slots for flexible scheduling. Source: `proposalActivities:665-680`
+  </Accordion>
+
+  <Accordion title="Meals" icon="utensils">
+    Track which meals are included each day:
+    
+    ```typescript
+    {
+      breakfast: true,
+      lunch: true,
+      dinner: false
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Transportation" icon="plane">
+    Document transfers between destinations:
+    
+    ```typescript
+    {
+      originName: "Arusha",
+      destinationName: "Serengeti",
+      mode: "flight_bush", // road_4x4, road_shuttle, road_bus, flight_domestic, flight_bush
+      durationMinutes: 90,
+      distanceKm: 320
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Pricing & Inclusions
+
+### Flexible Pricing Structure
+
+Configure pricing with multiple traveler types and extras:
+
+```typescript schema.ts
+pricingRows: [
+  { id: "1", count: 2, type: "Adult", unitPrice: 5500 },
+  { id: "2", count: 1, type: "Child", unitPrice: 3500 }
+],
+extras: [
+  { id: "1", name: "Hot Air Balloon Safari", price: 550, selected: false },
+  { id: "2", name: "Cultural Village Visit", price: 150, selected: true }
+]
+```
+
+<Note>
+  Use `hidePricing: true` to create proposals without showing costs to clients.
+</Note>
+
+### Inclusions & Exclusions
+
+Clearly communicate what's included:
+
+```typescript
+inclusions: [
+  "All park fees and government taxes",
+  "Professional English-speaking guide",
+  "4x4 safari vehicle with pop-up roof",
+  "Accommodation as per itinerary"
+],
+exclusions: [
+  "International flights",
+  "Travel insurance",
+  "Optional activities not mentioned",
+  "Tips and gratuities"
+]
+```
+
+## Themes & Branding
+
+Customize the look and feel of your proposals with themes. Available themes vary by plan tier:
+
+```typescript plans.ts
+// Free tier: minimalistic only
+// Paid tiers: additional premium themes
+theme: "minimalistic"
+```
+
+Add your branding:
+- **Hero Image**: Eye-catching cover photo
+- **Organization Logo**: Added automatically from settings
+- **About Description**: Company overview
+- **Payment Terms**: Custom payment policies
+
+## Sharing with Clients
+
+Send proposals directly to clients via email.
+
+```typescript proposals.ts:531-581
+// Share proposal endpoint
+await trpc.proposals.sendToClient({
+  proposalId: "proposal-uuid",
+  message: "Hello! Here's your customized safari proposal."
+});
+```
+
+The system automatically generates:
+- ✉️ Professional email with proposal details
+- 🔗 Unique shareable link
+- 📅 Start date and duration
+- 💰 Pricing summary (if not hidden)
+
+<Tip>
+  Proposals can be viewed without authentication, making it easy for clients to access and share with travel companions.
+</Tip>
+
+## Client Acceptance
+
+Clients can accept proposals directly from the shared link:
+
+```typescript proposals.ts:583-643
+// Client confirmation triggers email to agency
+await trpc.proposals.confirm({
+  proposalId: "proposal-uuid",
+  clientName: "John Smith"
+});
+```
+
+When a client accepts:
+- 📧 Notification sent to agency's notification email
+- 📊 Includes all proposal details and client information
+- ⏰ Timestamp of acceptance
+
+## Team Collaboration
+
+### Assignments
+
+Assign team members to proposals for better workflow management:
+
+```typescript proposals.ts:482-529
+// Assign a team member (admin only)
+await trpc.proposals.assign({
+  proposalId: "proposal-uuid",
+  userId: "team-member-uuid"
+});
+
+// Remove assignment
+await trpc.proposals.unassign({
+  proposalId: "proposal-uuid",
+  userId: "team-member-uuid"
+});
+```
+
+<Info>
+  The proposal creator is automatically assigned when saving for the first time. Additional assignments require admin privileges.
+</Info>
+
+### Dashboard Filtering
+
+Team members can filter proposals:
+- **My Proposals**: Only assigned to you
+- **All Proposals**: Everything in your organization
+
+```typescript proposals.ts:84-127
+await trpc.proposals.listForDashboard({ filter: "mine" });
+```
+
+## Data Model
+
+Key database tables from `/workspace/source/packages/db/src/schema.ts`:
+
+- **proposals** (586-627): Main proposal data, pricing, settings
+- **proposalDays** (630-648): Day-by-day itinerary
+- **proposalActivities** (665-680): Activities per day
+- **proposalAccommodations** (651-662): Accommodation assignments
+- **proposalMeals** (692-704): Meal inclusions
+- **proposalTransportation** (707-723): Transfers between destinations
+- **proposalAssignments** (726-742): Team member assignments
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Save Often" icon="floppy-disk">
+    Proposals auto-save on changes, but manual saves ensure nothing is lost during complex edits.
+  </Card>
+  
+  <Card title="Use Templates" icon="clone">
+    Start with tour templates to maintain consistency and save time.
+  </Card>
+  
+  <Card title="Preview Before Sharing" icon="eye">
+    Always preview the client view before sending to ensure everything looks perfect.
+  </Card>
+  
+  <Card title="Track Changes" icon="clock-rotate-left">
+    Proposals include updatedAt timestamps to track when changes were made.
+  </Card>
+</CardGroup>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Content Library" icon="images" href="/features/content-library">
+    Learn how to manage accommodations and photos for your proposals
+  </Card>
+  
+  <Card title="Collaboration" icon="users" href="/features/collaboration">
+    Explore comments, notes, and team features
+  </Card>
+  
+  <Card title="Clients" icon="address-book" href="/features/clients">
+    Set up and manage your client database
+  </Card>
+  
+  <Card title="Tours" icon="map" href="/features/tours">
+    Create reusable tour templates
+  </Card>
+</CardGroup>

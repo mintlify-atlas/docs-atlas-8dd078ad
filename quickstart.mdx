@@ -1,80 +1,362 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: "Quick Start Guide"
+description: "Get up and running with Makisala in minutes and create your first tour proposal"
 ---
 
-## Get started in three steps
+Welcome to Makisala! This guide will walk you through setting up your account and creating your first safari tour proposal from start to finish.
 
-Get your documentation site running locally and make your first customization.
+## What You'll Accomplish
 
-### Step 1: Set up your local environment
-
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 2: Deploy your changes
-
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
-
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
-
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
-
-### Step 3: Go live
-
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
-
-## Next steps
-
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
+By the end of this guide, you'll have:
+- Set up your organization profile
+- Added your first client
+- Created a professional tour proposal
+- Shared it with your client via email
 
 <Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
+This guide takes approximately 10-15 minutes to complete.
 </Note>
+
+## Prerequisites
+
+Before starting, make sure you have:
+- A Makisala account (sign up at your instance URL)
+- At least one client to create a proposal for
+- Basic information about your safari tour operation
+
+<Steps>
+
+<Step title="Set Up Your Organization">
+
+After signing up, you'll be prompted to complete your organization setup. This ensures your proposals reflect your agency's branding.
+
+**Configure these settings:**
+
+1. **Organization Name** - Your tour company name (e.g., "Serengeti Safaris Ltd")
+2. **Logo** (optional) - Upload your agency logo for branded proposals
+3. **About Description** - A brief description of your services for proposal footers
+4. **Payment Terms** - Your standard payment policies and cancellation terms
+5. **Notification Email** - Email address to receive client inquiries and comments
+
+Navigate to **Settings** → **Organization** to update these details.
+
+```typescript
+// Organization structure
+{
+  name: "Serengeti Safaris Ltd",
+  slug: "serengeti-safaris",
+  logoUrl: "https://...",
+  aboutDescription: "Expert Tanzania safari experiences since 2010",
+  paymentTerms: "50% deposit required, balance due 30 days before departure",
+  notificationEmail: "bookings@serengetisafaris.com"
+}
+```
+
+<Tip>
+Complete the onboarding checklist on your dashboard to unlock all features. You'll need to set your organization name, notification email, and have access to tours.
+</Tip>
+
+</Step>
+
+<Step title="Create Your First Client">
+
+Before creating proposals, add a client record to track who the proposal is for.
+
+1. Navigate to **Clients** from the sidebar
+2. Click **Add New Client**
+3. Fill in the client details:
+
+<ParamField path="name" type="string" required>
+  Client's full name
+</ParamField>
+
+<ParamField path="email" type="string">
+  Email address for sending proposals
+</ParamField>
+
+<ParamField path="phone" type="string">
+  Contact phone number
+</ParamField>
+
+<ParamField path="countryOfResidence" type="string">
+  Client's country of residence
+</ParamField>
+
+<ParamField path="notes" type="string">
+  Internal notes about preferences, budget, special requests
+</ParamField>
+
+```typescript
+// Example client
+{
+  name: "John Smith",
+  email: "john.smith@example.com",
+  phone: "+1-555-0123",
+  countryOfResidence: "United States",
+  notes: "Interested in luxury lodges, honeymoon trip, prefers June/July"
+}
+```
+
+</Step>
+
+<Step title="Create a New Proposal">
+
+Now you'll create your first tour proposal using a template from the library.
+
+1. Navigate to **Proposals** → **New Proposal**
+2. Select your client from the dropdown
+3. Choose a tour template from the library (e.g., "7-Day Tanzania Safari")
+4. Customize the proposal basics:
+
+- **Proposal Name** - Internal reference (e.g., "Smith - June 2024 Tanzania")
+- **Tour Title** - Client-facing title (e.g., "Luxury Tanzania Safari Adventure")
+- **Tour Type** - Safari type (e.g., "Luxury Safari", "Family Safari")
+- **Theme** - Visual theme (Minimalistic, Kudu, or Discovery)
+- **Hero Image** - Main proposal image from your library
+
+<Note>
+Tour templates are reusable itineraries that you can customize for each client. Shared templates are available to all users, while organization-specific tours are only visible to your team.
+</Note>
+
+</Step>
+
+<Step title="Build the Day-by-Day Itinerary">
+
+The itinerary builder is where you'll customize the daily activities, accommodations, and logistics.
+
+### Set Tour Logistics
+
+Configure the start and end details:
+
+- **Start Date** - Tour departure date
+- **Start City** - Departure location (e.g., "Arusha, Tanzania")
+- **End City** - Return location
+- **Pickup Point** - Hotel or airport pickup details
+- **Transfer Included** - Airport transfer information
+
+### Customize Daily Itinerary
+
+For each day in your tour:
+
+1. **Edit Day Title** - Descriptive title (e.g., "Day 1: Arrival in Arusha")
+2. **Add Activities** - Safari drives, cultural visits, etc. with time slots (Morning, Afternoon, Evening)
+3. **Select Accommodation** - Choose from your accommodation library
+4. **Configure Meals** - Check breakfast, lunch, dinner as included
+5. **Add Transportation** - Routes between destinations with mode (4x4, flight, etc.)
+
+**Example Day Structure:**
+
+```typescript
+{
+  dayNumber: 1,
+  title: "Arrival in Arusha",
+  description: "Welcome to Tanzania! Upon arrival at Kilimanjaro Airport...",
+  activities: [
+    {
+      name: "Airport Transfer",
+      moment: "Afternoon",
+      description: "Private transfer to your lodge in Arusha"
+    }
+  ],
+  accommodation: "Arusha Coffee Lodge",
+  meals: { dinner: true },
+  transportation: {
+    from: "Kilimanjaro Airport",
+    to: "Arusha",
+    mode: "road_4x4",
+    distanceKm: 50
+  }
+}
+```
+
+### Configure Tour Details
+
+Scroll to **Tour Details** section and set:
+
+- **Countries** - Countries visited (e.g., ["Tanzania", "Kenya"])
+- **Destination Name & Coordinates** - Final destination with GPS coordinates
+
+</Step>
+
+<Step title="Configure Pricing">
+
+Set up your pricing structure in the **Pricing** tab.
+
+### Add Traveler Groups
+
+Define your traveler segments:
+
+```typescript
+{
+  travelerGroups: [
+    { type: "Adult", count: 2 },
+    { type: "Child (6-12)", count: 1 }
+  ]
+}
+```
+
+### Add Pricing Rows
+
+Create pricing lines for different accommodation types:
+
+```typescript
+{
+  pricingRows: [
+    {
+      type: "Luxury Lodge",
+      count: 2,
+      unitPrice: 3500
+    }
+  ]
+}
+```
+
+### Add Optional Extras
+
+Offer add-ons that clients can select:
+
+```typescript
+{
+  extras: [
+    {
+      name: "Balloon Safari",
+      price: 550,
+      selected: false
+    },
+    {
+      name: "Masai Village Visit",
+      price: 75,
+      selected: true
+    }
+  ]
+}
+```
+
+### Set Inclusions & Exclusions
+
+List what's included and what's not:
+
+- **Inclusions**: Accommodations, meals as specified, park fees, professional guide, game drives
+- **Exclusions**: International flights, travel insurance, gratuities, personal expenses
+
+<Tip>
+You can hide pricing from the client view if you prefer to discuss costs offline. Toggle **Hide Pricing** in the pricing section.
+</Tip>
+
+</Step>
+
+<Step title="Preview Your Proposal">
+
+Before sharing, preview how your proposal will look to the client.
+
+1. Click **Preview** in the top-right corner
+2. Review all sections:
+   - Hero image and tour overview
+   - Day-by-day itinerary with activities and accommodations
+   - Pricing breakdown and extras
+   - Inclusions/exclusions
+   - Your organization's about section and payment terms
+
+3. Test different themes by changing the **Theme** setting
+4. Make any final adjustments to content, images, or pricing
+
+</Step>
+
+<Step title="Share with Your Client">
+
+You're ready to share! You have two options:
+
+### Option 1: Send via Email
+
+1. Click **Share** → **Send Email**
+2. The proposal is automatically published and saved
+3. Enter the client's email (pre-filled if you added their email in Step 2)
+4. Customize the email message (optional)
+5. Click **Send**
+
+The client receives an email with a link to view the proposal online.
+
+### Option 2: Copy Shareable Link
+
+1. Click **Share** → **Copy Link**
+2. The proposal URL is copied to your clipboard
+3. Share this link directly via WhatsApp, SMS, or any other channel
+
+**Proposal URL format:** `https://your-instance.com/proposal/[proposal-id]`
+
+<Warning>
+Proposals are publicly accessible via their unique URL. Anyone with the link can view the proposal, but only authenticated users can edit it.
+</Warning>
+
+</Step>
+
+</Steps>
+
+## What's Next?
+
+Now that you've created your first proposal, explore these features:
+
+<CardGroup cols={2}>
+  <Card
+    title="Team Collaboration"
+    icon="users"
+    href="/features/collaboration"
+  >
+    Invite team members, assign proposals, and collaborate with comments
+  </Card>
+  <Card
+    title="Customize Themes"
+    icon="palette"
+    href="/proposals/customization"
+  >
+    Choose from three professional themes and customize your branding
+  </Card>
+  <Card
+    title="Tour Library"
+    icon="layer-group"
+    href="/tours/creating-tours"
+  >
+    Create custom tour templates for faster proposal creation
+  </Card>
+  <Card
+    title="Organization Settings"
+    icon="gear"
+    href="/organization/settings"
+  >
+    Configure notifications, billing, and advanced settings
+  </Card>
+</CardGroup>
+
+## Frequently Asked Questions
+
+<AccordionGroup>
+  <Accordion title="Can I edit a proposal after sharing it?">
+    Yes! Any changes you make are immediately reflected in the shared link. Clients always see the latest version.
+  </Accordion>
+
+  <Accordion title="How do clients comment on proposals?">
+    Clients can click anywhere on the proposal to leave a comment. You'll receive an email notification and can respond directly in the dashboard.
+  </Accordion>
+
+  <Accordion title="Can I duplicate an existing proposal?">
+    Not yet, but you can clone tour templates. If you need to create a similar proposal, start from the same tour template and adjust the details.
+  </Accordion>
+
+  <Accordion title="Do proposal links expire?">
+    No, proposal links remain active indefinitely. You can delete a proposal to revoke access.
+  </Accordion>
+
+  <Accordion title="Can I export proposals as PDF?">
+    Yes! Click **Export PDF** from the share menu. PDF export is available on all paid plans.
+  </Accordion>
+</AccordionGroup>
+
+## Get Help
+
+If you run into any issues:
+
+- Check the [Features](/features/proposals) documentation for detailed explanations
+- Review the [API Reference](/api/introduction) if you're integrating programmatically
+- Contact support at your organization's notification email
+
+Happy safari planning! 🦁

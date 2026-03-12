@@ -1,0 +1,212 @@
+---
+title: Contributing Guide
+description: Learn how to contribute to Makisala and follow our development standards
+---
+
+## Welcome Contributors
+
+Thank you for your interest in contributing to Makisala! This guide will help you get started with contributing to the project.
+
+## Getting Started
+
+### Prerequisites
+
+- [Bun](https://bun.sh) (latest version)
+- Node.js 20+
+- Git
+
+### Setting Up Your Development Environment
+
+1. **Fork and clone the repository**
+
+```bash
+git clone https://github.com/your-username/makisala.git
+cd makisala
+```
+
+2. **Install dependencies**
+
+```bash
+bun install --frozen-lockfile
+```
+
+3. **Run the development server**
+
+```bash
+cd apps/kitasuro
+bun dev
+```
+
+The application will be available at `http://localhost:3000`.
+
+## Code Style Guidelines
+
+Makisala follows consistent code style guidelines to maintain code quality across the project.
+
+### Formatting
+
+We use **Prettier** for code formatting with the following configuration:
+
+- **Single quotes** for strings
+- **Trailing commas** in all multi-line structures
+- **100 character** print width
+- **Tailwind CSS plugin** for class sorting
+
+```javascript
+// prettier.config.js
+{
+  singleQuote: true,
+  trailingComma: 'all',
+  printWidth: 100,
+  plugins: ['prettier-plugin-tailwindcss']
+}
+```
+
+### Linting
+
+The project uses **ESLint** with Next.js recommended rules:
+
+```bash
+# Run linting
+bun lint
+```
+
+### TypeScript
+
+All code must be written in TypeScript with strict type checking enabled. Avoid using `any` types when possible.
+
+## Project Structure
+
+Makisala is organized as a monorepo with workspaces:
+
+```
+makisala/
+├── apps/
+│   ├── kitasuro/        # Main Next.js application
+│   └── makisala/        # Additional app
+├── packages/
+│   ├── db/             # Database schema and utilities
+│   ├── resend/         # Email service
+│   └── ui/             # Shared UI components
+└── tooling/
+    └── lint/           # Shared ESLint configuration
+```
+
+## Making Changes
+
+### Branch Naming
+
+Use descriptive branch names that reflect the work being done:
+
+- `feature/add-tour-export`
+- `fix/client-search-bug`
+- `docs/update-api-reference`
+- `refactor/optimize-queries`
+
+### Commit Messages
+
+Write clear, concise commit messages that explain the "why" rather than the "what":
+
+```bash
+# Good
+git commit -m "Fix client search escaping special SQL characters"
+
+# Not ideal
+git commit -m "Update clients.ts"
+```
+
+### Writing Tests
+
+All new features and bug fixes should include tests. See our [Testing Guide](/development/testing) for detailed information.
+
+## Pull Request Process
+
+### Before Submitting
+
+1. **Run tests** to ensure nothing is broken:
+
+```bash
+cd apps/kitasuro
+bun test
+```
+
+2. **Run linting** to catch style issues:
+
+```bash
+bun lint
+```
+
+3. **Build the application** to check for type errors:
+
+```bash
+bun build
+```
+
+### Creating a Pull Request
+
+1. **Push your branch** to your fork:
+
+```bash
+git push origin feature/your-feature-name
+```
+
+2. **Open a Pull Request** on GitHub with:
+   - A clear title describing the change
+   - A description explaining what changed and why
+   - References to any related issues
+   - Screenshots or videos for UI changes
+
+3. **Address review feedback** promptly and professionally
+
+### PR Requirements
+
+- All tests must pass
+- Code must be properly formatted (Prettier)
+- No ESLint errors
+- TypeScript compilation must succeed
+- Changes must be reviewed by at least one maintainer
+
+## Code Review Guidelines
+
+### For Contributors
+
+- Be open to feedback and constructive criticism
+- Respond to review comments in a timely manner
+- Update your PR based on feedback
+- Ask questions if something is unclear
+
+### For Reviewers
+
+- Be respectful and constructive
+- Explain the reasoning behind suggestions
+- Approve PRs that meet quality standards
+- Test significant changes locally when possible
+
+## Reporting Issues
+
+When reporting bugs or requesting features:
+
+1. **Search existing issues** to avoid duplicates
+2. **Provide clear reproduction steps** for bugs
+3. **Include environment details** (OS, browser, version)
+4. **Add screenshots or logs** when helpful
+
+## Community Guidelines
+
+- Be respectful and inclusive
+- Help others learn and grow
+- Give credit where credit is due
+- Focus on constructive discussions
+
+## Getting Help
+
+If you need help:
+
+- Check the [documentation](/) first
+- Search existing [GitHub issues](https://github.com/makisala/makisala/issues)
+- Ask questions in pull request comments
+- Reach out to maintainers if needed
+
+## License
+
+By contributing to Makisala, you agree that your contributions will be licensed under the project's license.

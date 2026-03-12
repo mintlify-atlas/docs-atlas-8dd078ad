@@ -1,0 +1,434 @@
+---
+title: Team Collaboration
+description: Work together with comments, assignments, internal notes, and team management
+icon: 'users'
+---
+
+## Overview
+
+Makisala provides powerful collaboration tools to help your team work together on proposals. Use comments for client feedback, internal notes for team discussions, and assignments to manage workload.
+
+## Comments (Client-Facing)
+
+Comments are visible to clients and used for feedback and questions on proposals.
+
+### Comment Structure
+
+```typescript schema.ts:840-852
+{
+  id: "comment-uuid",
+  proposalId: "proposal-uuid",
+  userId: "user-uuid",        // Optional: authenticated user
+  userName: "John Smith",     // Display name
+  content: "Could we extend day 3 by half a day?",
+  
+  // Position on proposal (for visual annotations)
+  posX: 25.50,   // Percentage from left
+  posY: 40.25,   // Percentage from top
+  width: 15.00,  // Optional: highlight width
+  height: 8.50,  // Optional: highlight height
+  
+  status: "open", // or "resolved"
+  createdAt: "2024-03-12T10:30:00Z"
+}
+```
+
+<Info>
+  Comments support spatial positioning, allowing clients and teams to annotate specific parts of the proposal visually.
+</Info>
+
+### Create Comment
+
+```typescript comments.ts:43-112
+const result = await trpc.comments.create({
+  proposalId: "proposal-uuid",
+  authorName: "Jane Doe",
+  content: "Can we add a hot air balloon ride on day 4?",
+  posX: 30.5,
+  posY: 45.2,
+  width: 20,      // Optional
+  height: 10      // Optional
+});
+```
+
+When a comment is created:
+- 📧 **Email notification** sent to organization's notification email
+- 📍 **Position stored** for visual display
+- 🔔 **Real-time update** in team dashboard
+
+### Comment Threads
+
+Comments support threaded replies:
+
+```typescript comments.ts:124-177
+const reply = await trpc.comments.createReply({
+  commentId: "comment-uuid",
+  authorName: "Tour Operator",
+  content: "Absolutely! We can add that as an optional activity."
+});
+```
+
+Replies are nested under parent comments:
+
+```typescript schema.ts:854-863
+export const commentReplies = pgTable('comment_replies', {
+  id: uuid('id').primaryKey(),
+  commentId: uuid('comment_id').references(() => comments.id, { onDelete: 'cascade' }),
+  content: text('content').notNull(),
+  userName: text('user_name'),
+  createdAt: timestamp('created_at').defaultNow()
+});
+```
+
+### List Comments
+
+```typescript comments.ts:11-41
+const comments = await trpc.comments.list({ proposalId: "proposal-uuid" });
+
+// Returns structured data:
+[
+  {
+    id: "comment-uuid",
+    posX: 25.5,
+    posY: 40.2,
+    content: "Original comment",
+    userName: "Client Name",
+    status: "open",
+    createdAt: Date,
+    replies: [
+      {
+        id: "reply-uuid",
+        content: "Reply text",
+        userName: "Team Member",
+        createdAt: Date
+      }
+    ]
+  }
+]
+```
+
+### Resolve Comments
+
+```typescript comments.ts:114-122
+await trpc.comments.resolve({ commentId: "comment-uuid" });
+// Updates status to "resolved"
+```
+
+<Tip>
+  Use comment resolution to track which feedback has been addressed. Resolved comments can be filtered in the UI.
+</Tip>
+
+### Email Notifications
+
+Automatic notifications keep teams informed:
+
+```typescript comments.ts:82-108
+// When comment is created
+await sendCommentNotificationEmail({
+  proposalId: "proposal-uuid",
+  clientName: "John Smith",
+  proposalTitle: "Tanzania Safari",
+  commentContent: "Comment text",
+  commentAuthor: "John Smith",
+  recipientEmail: organization.notificationEmail,
+  commentPosition: { posX, posY, width, height }
+});
+```
+
+## Internal Notes
+
+Notes are private team discussions not visible to clients.
+
+### Note Structure
+
+```typescript schema.ts:890-904
+{
+  id: "note-uuid",
+  proposalId: "proposal-uuid",
+  parentId: null,           // For threaded replies
+  userId: "user-uuid",
+  userName: "Team Member",
+  content: "@sarah Let's discuss pricing with the client tomorrow",
+  createdAt: "2024-03-12T14:30:00Z",
+  updatedAt: "2024-03-12T14:30:00Z"
+}
+```
+
+### Create Note
+
+```typescript notes.ts:80-140
+const result = await trpc.notes.create({
+  proposalId: "proposal-uuid",
+  content: "Need to follow up on dietary requirements",
+  parentId: undefined,      // Optional: for replies
+  mentionedUserIds: ["user-uuid"]  // Optional: @mentions
+});
+```
+
+### @Mentions
+
+Mention team members to notify them:
+
+```typescript notes.ts:102-132
+// Parse mentions from content (done client-side)
+mentionedUserIds: ["user-1", "user-2"]
+
+// System sends email notifications
+for (const mentionedUser of mentionedUsers) {
+  await sendNoteMentionEmail({
+    recipientEmail: mentionedUser.email,
+    recipientName: mentionedUser.name,
+    mentionerName: ctx.user.name,
+    noteContent: input.content,
+    proposalTitle: "Safari Proposal",
+    proposalId: "proposal-uuid"
+  });
+}
+```
+
+<Note>
+  Users who mention themselves are excluded from notifications to avoid self-notifications.
+</Note>
+
+### Threaded Replies
+
+Notes support nested conversations:
+
+```typescript notes.ts:30-77
+// List notes with full thread structure
+const { notes, nextCursor } = await trpc.notes.list({
+  proposalId: "proposal-uuid",
+  cursor: undefined  // For pagination
+});
+
+// Returns notes with nested replies:
+{
+  id: "note-uuid",
+  content: "Main note",
+  replies: [
+    {
+      id: "reply-1-uuid",
+      content: "First reply",
+      replies: [
+        {
+          id: "reply-2-uuid",
+          content: "Nested reply"
+        }
+      ]
+    }
+  ],
+  replyCount: 2  // Total count including nested
+}
+```
+
+### Get Team Members
+
+For @mention autocomplete:
+
+```typescript notes.ts:162-174
+const teamMembers = await trpc.notes.getTeamMembers();
+
+// Returns:
+[
+  { id: "user-uuid", name: "John Doe", email: "john@example.com", image: "https://..." },
+  { id: "user-uuid-2", name: "Jane Smith", email: "jane@example.com", image: null }
+]
+```
+
+### Delete Notes
+
+Users can only delete their own notes:
+
+```typescript notes.ts:142-160
+await trpc.notes.delete({ noteId: "note-uuid" });
+
+// Validates ownership:
+if (note.userId !== ctx.user.id) {
+  throw new TRPCError({ code: 'FORBIDDEN' });
+}
+```
+
+<Warning>
+  Deleting a parent note cascades to delete all replies due to the foreign key constraint.
+</Warning>
+
+## Proposal Assignments
+
+Assign team members to proposals for workload management.
+
+### Assignment Structure
+
+```typescript schema.ts:726-742
+{
+  id: "assignment-uuid",
+  proposalId: "proposal-uuid",
+  userId: "user-uuid",          // Assigned team member
+  assignedBy: "admin-uuid",     // Who made the assignment
+  createdAt: "2024-03-12T10:00:00Z"
+}
+```
+
+### Assign Team Member
+
+```typescript proposals.ts:482-514
+// Admin only
+await trpc.proposals.assign({
+  proposalId: "proposal-uuid",
+  userId: "team-member-uuid"
+});
+```
+
+<Info>
+  Only organization admins can assign team members. The proposal creator is automatically assigned on first save.
+</Info>
+
+### Unassign Team Member
+
+```typescript proposals.ts:516-529
+await trpc.proposals.unassign({
+  proposalId: "proposal-uuid",
+  userId: "team-member-uuid"
+});
+```
+
+### Filter by Assignment
+
+Team members can filter their dashboard:
+
+```typescript proposals.ts:84-102
+// Show only my proposals
+const myProposals = await trpc.proposals.listForDashboard({ filter: "mine" });
+
+// Show all proposals in organization
+const allProposals = await trpc.proposals.listForDashboard({ filter: "all" });
+```
+
+The "mine" filter:
+1. Finds all proposal IDs where user is assigned
+2. Returns only those proposals
+3. Returns empty array if no assignments
+
+### Auto-Assignment
+
+Creators are automatically assigned:
+
+```typescript proposals.ts:462-476
+// After saving proposal
+if (ctx.user.id) {
+  const existingAssignments = await checkAssignments(proposalId);
+  
+  if (existingAssignments.length === 0) {
+    await assignCreator(proposalId, ctx.user.id);
+  }
+}
+```
+
+## Team Management
+
+### Organization Members
+
+Team members are managed through the Better Auth organization plugin:
+
+```typescript schema.ts:232-242
+export const member = pgTable('member', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  organizationId: uuid('organization_id').notNull(),
+  role: text('role').notNull().default('member'),  // "admin" or "member"
+  createdAt: timestamp('created_at').defaultNow()
+});
+```
+
+### Roles
+
+**Admin**:
+- ✅ Manage team members
+- ✅ Assign proposals
+- ✅ Access all proposals (bypass filter)
+- ✅ Configure organization settings
+- ✅ Manage billing
+
+**Member**:
+- ✅ Create and edit proposals
+- ✅ View assigned proposals
+- ✅ Add comments and notes
+- ❌ Cannot assign proposals
+- ❌ Cannot manage team
+
+### Invitations
+
+```typescript schema.ts:256-267
+export const invitation = pgTable('invitation', {
+  id: text('id').primaryKey(),
+  email: text('email').notNull(),
+  inviterId: text('inviter_id'),
+  organizationId: uuid('organization_id').notNull(),
+  role: text('role').notNull().default('member'),
+  status: text('status').notNull().default('pending'),
+  expiresAt: timestamp('expires_at').notNull()
+});
+```
+
+## Feature Access Control
+
+Collaboration features may be restricted by plan:
+
+```typescript comments.ts:56-66
+const access = await checkFeatureAccess(proposal.organizationId, 'comments');
+if (!access.allowed) {
+  throw new TRPCError({ code: 'FORBIDDEN', message: access.reason });
+}
+```
+
+Check your plan for:
+- 💬 Comment limits
+- 📝 Note history retention
+- 👥 Team member limits
+- 📧 Email notification quotas
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Use the Right Tool" icon="toolbox">
+    Comments for client discussions, notes for internal team conversations. Keep them separate for clarity.
+  </Card>
+  
+  <Card title="@Mention Strategically" icon="at">
+    Only mention team members who need to take action. Avoid notification overload.
+  </Card>
+  
+  <Card title="Resolve Promptly" icon="circle-check">
+    Mark comments as resolved once addressed to keep feedback organized.
+  </Card>
+  
+  <Card title="Assign Clearly" icon="user-check">
+    Assign proposals to specific team members to avoid confusion about ownership.
+  </Card>
+</CardGroup>
+
+## Data Model Summary
+
+Key tables from `/workspace/source/packages/db/src/schema.ts`:
+
+- **comments** (840-852): Client-facing feedback
+- **commentReplies** (854-863): Threaded comment discussions
+- **proposalNotes** (890-904): Internal team notes with threading
+- **proposalAssignments** (726-742): Team member assignments
+- **member** (232-242): Organization membership
+- **invitation** (256-267): Team invitations
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Proposals" icon="file-text" href="/features/proposals">
+    Learn how to create and manage proposals
+  </Card>
+  
+  <Card title="Team Settings" icon="building" href="/organization/settings">
+    Configure notification emails and team preferences
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/introduction">
+    Explore the comments and notes API
+  </Card>
+</CardGroup>

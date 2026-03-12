@@ -1,0 +1,289 @@
+---
+title: Creating Tours
+description: Learn how to create and manage tour templates in Makisala
+---
+
+Tours are the foundation of your travel proposals in Makisala. They serve as reusable templates that can be customized for individual clients. A tour includes overview information, pricing, activities, and a day-by-day itinerary.
+
+## Tour Structure
+
+Each tour in Makisala consists of:
+
+- **Basic Information**: Tour name, country, number of days, pricing
+- **Overview**: Detailed description of the tour
+- **Visual Assets**: Hero image and media
+- **Tags**: Categorization (e.g., 'family', 'luxury', 'adventure')
+- **Itinerary Days**: Day-by-day breakdown with accommodations
+- **Activities**: Tour highlights and included activities
+- **Top Features**: Key selling points
+
+## Database Schema
+
+Tours are stored in the `tours` table with the following structure:
+
+```typescript
+type Tour = {
+  id: string;
+  tourName: string;
+  slug: string;
+  overview: string;
+  pricing: number;
+  country: string;
+  sourceUrl?: string;
+  activities: Array<{ title: string; activity_name: string }>;
+  topFeatures: Array<{ title: string; description: string }>;
+  img_url: string;
+  number_of_days: number;
+  tags: string[];
+  organizationId: string | null; // null = shared template
+  clonedFromId?: string; // reference to original template
+  createdAt: Date;
+  updatedAt: Date;
+};
+```
+
+## Creating a New Tour
+
+### From a Template
+
+Makisala provides shared tour templates that can be cloned to your organization:
+
+<Steps>
+  <Step title="Browse Templates">
+    List available shared templates using the API:
+    
+    ```typescript
+    const templates = await trpc.tours.getSharedTemplates.query();
+    
+    // Returns up to 100 shared templates
+    templates.forEach(template => {
+      console.log(template.name, template.days, template.country);
+    });
+    ```
+  </Step>
+
+  <Step title="Clone Template">
+    Clone a template to your organization:
+    
+    ```typescript
+    const result = await trpc.tours.cloneTemplate.mutate({
+      templateId: 'template-uuid'
+    });
+    
+    // Returns: { success: true, tourId: 'new-tour-uuid' }
+    ```
+    
+    The cloning process:
+    - Copies all tour details (name, overview, pricing, etc.)
+    - Duplicates all itinerary days
+    - Preserves accommodation links
+    - Links to original template via `clonedFromId`
+    - Associates with your organization
+  </Step>
+
+  <Step title="Customize Your Tour">
+    After cloning, customize the tour for your needs (see Updating Tours below).
+  </Step>
+</Steps>
+
+### Manual Creation
+
+While the API doesn't expose a direct `create` endpoint, tours can be created through database operations. The typical workflow involves:
+
+1. **Insert tour record** with basic information
+2. **Add itinerary days** with sequential day numbers (1, 2, 3...)
+3. **Link accommodations** to specific days
+4. **Associate with organization** via `organizationId`
+
+## Updating Tours
+
+Update existing tours using the `update` mutation:
+
+```typescript
+const result = await trpc.tours.update.mutate({
+  id: 'tour-uuid',
+  tourName: 'Updated Tour Name',
+  overview: 'New detailed description',
+  pricing: '3500',
+  country: 'Tanzania',
+  tags: ['luxury', 'wildlife', 'photography'],
+  img_url: 'https://cdn.example.com/tour-hero.jpg',
+  number_of_days: 10,
+  itineraries: [
+    {
+      dayNumber: 1,
+      title: 'Arrival in Arusha',
+      overview: 'Welcome to Tanzania! Transfer to your hotel.',
+      national_park_id: 'park-uuid', // optional
+      accommodation_id: 'accommodation-uuid' // optional
+    },
+    {
+      dayNumber: 2,
+      title: 'Tarangire National Park',
+      overview: 'Full day game drive in Tarangire.',
+      national_park_id: 'tarangire-uuid',
+      accommodation_id: 'lodge-uuid'
+    }
+    // ... more days
+  ]
+});
+```
+
+### Update Validation
+
+The API enforces several validation rules:
+
+<Warning>
+  **Day Number Requirements**
+  - Day numbers must be positive integers
+  - Day numbers must be sequential starting from 1
+  - No duplicate day numbers allowed
+  - Maximum 60 days per tour
+</Warning>
+
+<Info>
+  When updating itineraries, **all existing days are deleted** and replaced with the new itinerary. Ensure you include all days you want to keep.
+</Info>
+
+## Listing Tours
+
+Retrieve all tours for your organization:
+
+```typescript
+const tours = await trpc.tours.list.query();
+
+// Returns:
+[
+  {
+    id: 'tour-uuid',
+    name: 'Serengeti Safari Adventure',
+    days: 7,
+    imageUrl: 'https://cdn.example.com/image.jpg',
+    overview: 'Experience the great migration...',
+    country: 'Tanzania',
+    pricing: '4500',
+    tags: ['wildlife', 'luxury']
+  }
+  // ... more tours
+]
+```
+
+Tours are automatically filtered by your organization and sorted alphabetically by name.
+
+## Getting Tour Details
+
+Fetch complete tour information including itinerary:
+
+```typescript
+const tour = await trpc.tours.getById.query({ id: 'tour-uuid' });
+
+// Returns tour with nested structure:
+{
+  id: 'tour-uuid',
+  tourName: 'Serengeti Safari Adventure',
+  days: [
+    {
+      id: 'day-uuid',
+      dayNumber: 1,
+      dayTitle: 'Arrival',
+      overview: 'Welcome day...',
+      national_park_id: 'park-uuid',
+      itineraryAccommodations: [
+        {
+          accommodation: {
+            id: 'acc-uuid',
+            name: 'Safari Lodge',
+            images: [...]
+          }
+        }
+      ]
+    }
+    // ... more days
+  ]
+}
+```
+
+<Note>
+  The `getById` endpoint verifies tour ownership. You can only access tours that belong to your organization.
+</Note>
+
+## Deleting Tours
+
+Remove a tour from your organization:
+
+```typescript
+const result = await trpc.tours.delete.mutate({ id: 'tour-uuid' });
+// Returns: { success: true }
+```
+
+<Warning>
+  Deleting a tour will cascade delete all related itinerary days and accommodation links. However, proposals using this tour will remain but may need updates.
+</Warning>
+
+## Organization vs. Shared Templates
+
+Tours can exist in two contexts:
+
+### Organization Tours
+- `organizationId` is set to your organization UUID
+- Only accessible by your organization
+- Can be modified and deleted
+- Used to create proposals for clients
+
+### Shared Templates
+- `organizationId` is `null`
+- Accessible to all organizations via `getSharedTemplates`
+- Read-only (can be cloned, not modified)
+- Curated by platform administrators
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Tour Naming">
+    Use descriptive, unique names that include:
+    - Destination or region
+    - Tour type or focus
+    - Duration
+    
+    Example: "10-Day Luxury Tanzania Safari" or "Classic Kenya Wildlife Adventure"
+  </Accordion>
+
+  <Accordion title="Pricing Strategy">
+    Store base pricing in the `pricing` field. For client-specific pricing:
+    - Use the tour as a template
+    - Customize pricing in the proposal
+    - Keep tour pricing as "starting from" amount
+  </Accordion>
+
+  <Accordion title="Tags for Organization">
+    Use consistent tags across tours:
+    - Comfort level: 'budget', 'mid-range', 'luxury'
+    - Type: 'family', 'honeymoon', 'group', 'solo'
+    - Focus: 'wildlife', 'cultural', 'adventure', 'beach'
+    - Max 20 tags per tour, 100 chars each
+  </Accordion>
+
+  <Accordion title="Image Management">
+    - Use high-quality hero images (1920x1080 or larger)
+    - Store images in your organization's media library
+    - Use descriptive image URLs
+    - Consider using CDN for better performance
+  </Accordion>
+</AccordionGroup>
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Itineraries" icon="map" href="/tours/itineraries">
+    Build detailed day-by-day itineraries
+  </Card>
+  <Card title="Accommodations" icon="hotel" href="/tours/accommodations">
+    Manage accommodation options
+  </Card>
+  <Card title="Activities" icon="hiking" href="/tours/activities">
+    Activity library and management
+  </Card>
+  <Card title="Proposals" icon="file-contract" href="/proposals/creating-proposals">
+    Create client proposals from tours
+  </Card>
+</CardGroup>

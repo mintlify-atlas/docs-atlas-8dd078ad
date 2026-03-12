@@ -1,0 +1,362 @@
+---
+title: Client Management
+description: Organize and track your clients with a built-in CRM system
+icon: 'address-book'
+---
+
+## Overview
+
+Makisala includes a lightweight CRM to help you manage client information, track communications, and link proposals to the right travelers.
+
+## Client Records
+
+### Basic Information
+
+Store essential client details:
+
+```typescript schema.ts:171-183
+{
+  name: "John Smith",
+  email: "john@example.com",
+  phone: "+1-555-0123",
+  countryOfResidence: "United States",
+  notes: "Interested in wildlife photography. Prefers luxury lodges."
+}
+```
+
+<ParamField path="name" type="string" required>
+  Client's full name (max 255 characters)
+</ParamField>
+
+<ParamField path="email" type="string">
+  Email address for sending proposals and communications (max 255 characters)
+</ParamField>
+
+<ParamField path="phone" type="string">
+  Contact phone number (max 50 characters)
+</ParamField>
+
+<ParamField path="countryOfResidence" type="string">
+  Client's home country (max 100 characters)
+</ParamField>
+
+<ParamField path="notes" type="text">
+  Internal notes about preferences, requirements, or history (max 5000 characters)
+</ParamField>
+
+## Managing Clients
+
+### Create Client
+
+```typescript clients.ts:62-90
+const result = await trpc.clients.create({
+  name: "Jane Doe",
+  email: "jane@example.com",
+  phone: "+44-20-1234-5678",
+  countryOfResidence: "United Kingdom",
+  notes: "First-time safari traveler. Celebrating anniversary."
+});
+
+// Returns: { id: "client-uuid" }
+```
+
+### List Clients
+
+Retrieve clients with pagination and search:
+
+```typescript clients.ts:8-45
+const response = await trpc.clients.list({
+  query: "Smith",     // Search by name
+  page: 1,            // Page number
+  limit: 10           // Results per page (max 100)
+});
+
+const { clients, pagination } = response;
+// pagination: { page, limit, hasNextPage }
+```
+
+<Info>
+  Search requires at least 2 characters and uses case-insensitive matching on client names.
+</Info>
+
+### Get Client Details
+
+```typescript clients.ts:47-60
+const client = await trpc.clients.getById({ id: "client-uuid" });
+```
+
+### Update Client
+
+```typescript clients.ts:92-118
+await trpc.clients.update({
+  id: "client-uuid",
+  name: "Jane Doe-Smith",
+  email: "jane.smith@example.com",
+  phone: "+44-20-8765-4321",
+  countryOfResidence: "United Kingdom",
+  notes: "Updated preferences: vegetarian meals required."
+});
+```
+
+<Note>
+  All updates include an automatic `updatedAt` timestamp.
+</Note>
+
+### Delete Client
+
+```typescript clients.ts:120-128
+await trpc.clients.delete({ id: "client-uuid" });
+```
+
+<Warning>
+  When you delete a client, associated proposals will NOT be deleted. The proposal's `clientId` will be set to null.
+</Warning>
+
+## Linking to Proposals
+
+Connect clients to proposals for better organization:
+
+```typescript proposals.ts:292-297
+const proposal = {
+  name: "Tanzania Safari 2024",
+  clientId: "client-uuid",  // Links to client record
+  // ... other proposal data
+};
+```
+
+Benefits of linking:
+- 📧 **Auto-fill email** when sharing proposals
+- 📊 **Track proposals** per client
+- 👥 **Client history** for better service
+- 🔍 **Easy lookup** of past trips
+
+## Client Communication
+
+### Email Integration
+
+When sharing a proposal with a linked client:
+
+```typescript proposals.ts:531-581
+await trpc.proposals.sendToClient({
+  proposalId: "proposal-uuid",
+  message: "Custom message for the client"
+});
+
+// System automatically:
+// - Retrieves client email from client record
+// - Personalizes email with client name
+// - Includes proposal details and link
+```
+
+The email includes:
+- Client's name from the client record
+- Agency name and branding
+- Proposal title and summary
+- Start date and duration
+- Unique shareable link
+- Custom message from your team
+
+### Acceptance Notifications
+
+When clients accept proposals:
+
+```typescript proposals.ts:583-643
+// Client accepts proposal (public endpoint)
+await trpc.proposals.confirm({
+  proposalId: "proposal-uuid",
+  clientName: "John Smith"
+});
+
+// Agency receives email notification with:
+// - Client name and email from client record
+// - Proposal details
+// - Total pricing
+// - Timestamp of acceptance
+```
+
+## Organization Scoping
+
+<Info>
+  All client records are scoped to your organization. You can only view and manage clients belonging to your organization.
+</Info>
+
+Every client operation automatically filters by organization:
+
+```typescript clients.ts:23
+const conditions = [eq(clients.organizationId, ctx.orgId)];
+```
+
+This ensures:
+- ✅ Data privacy between organizations
+- ✅ No accidental cross-organization access
+- ✅ Clean data separation in multi-tenant system
+
+## Search & Filtering
+
+### Name Search
+
+The search feature uses fuzzy matching:
+
+```typescript clients.ts:25-28
+if (query && query.length >= 2) {
+  conditions.push(ilike(clients.name, `%${escapeLikeQuery(query)}%`));
+}
+```
+
+**Examples:**
+- Query: `"smith"` matches `"John Smith"`, `"Smithson"`, `"Jane Goldsmith"`
+- Query: `"john"` matches `"John Smith"`, `"Johnson"`, `"Johnathan"`
+
+### Sorting
+
+Clients are sorted by creation date (newest first):
+
+```typescript clients.ts:36
+.orderBy(desc(clients.createdAt))
+```
+
+## Data Model
+
+Client schema from `/workspace/source/packages/db/src/schema.ts:171-183`:
+
+```typescript
+export const clients = pgTable('clients', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  email: text('email'),
+  phone: text('phone'),
+  countryOfResidence: text('country_of_residence'),
+  notes: text('notes'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
+```
+
+### Relationships
+
+```typescript schema.ts:185-191
+export const clientsRelations = relations(clients, ({ one, many }) => ({
+  organization: one(organizations),
+  proposals: many(proposals),  // One client can have many proposals
+}));
+```
+
+## Pagination
+
+The list endpoint uses cursor-based pagination:
+
+```typescript clients.ts:30-44
+const limit = input?.limit ?? 10;
+const offset = (page - 1) * limit;
+
+const data = await ctx.db
+  .select()
+  .from(clients)
+  .limit(limit + 1)  // Fetch one extra to check for next page
+  .offset(offset);
+
+const hasNextPage = data.length > limit;
+const clientsData = hasNextPage ? data.slice(0, limit) : data;
+```
+
+This approach:
+- ✅ Efficient for large datasets
+- ✅ Consistent results during concurrent updates
+- ✅ Simple page-based navigation
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Complete Profiles" icon="clipboard-check">
+    Fill in all client details to make proposal sending seamless. Email is especially important for sharing.
+  </Card>
+  
+  <Card title="Use Notes Effectively" icon="note-sticky">
+    Track preferences, dietary restrictions, and special requests in the notes field for personalized service.
+  </Card>
+  
+  <Card title="Keep Emails Updated" icon="envelope">
+    Verify email addresses before sending proposals to avoid delivery issues.
+  </Card>
+  
+  <Card title="Regular Cleanup" icon="broom">
+    Periodically review and update client records to maintain data quality.
+  </Card>
+</CardGroup>
+
+## Validation Rules
+
+<Info>
+  **Field Constraints**
+  - Name: Required, 1-255 characters
+  - Email: Valid email format, max 255 characters
+  - Phone: Max 50 characters
+  - Country: Max 100 characters
+  - Notes: Max 5000 characters
+  - Query search: Minimum 2 characters
+  - List limit: Maximum 100 per page
+</Info>
+
+## Error Handling
+
+```typescript
+// Client not found
+try {
+  const client = await trpc.clients.getById({ id: "invalid-uuid" });
+} catch (error) {
+  // TRPCError: code='NOT_FOUND', message='Client not found'
+}
+
+// Invalid email format
+try {
+  await trpc.clients.create({
+    name: "Test",
+    email: "invalid-email"
+  });
+} catch (error) {
+  // Validation error from Zod schema
+}
+```
+
+## Integration Examples
+
+### Quick Client Lookup for Proposals
+
+```typescript tours.ts:202-223
+// Combined query used in proposal builder
+const { tours, clients } = await trpc.tours.getToursAndClients();
+
+// Returns simplified client list:
+// [{ id: "uuid", name: "John Smith" }, ...]
+```
+
+### Client in Dashboard
+
+```typescript proposals.ts:104-116
+const proposals = await trpc.proposals.listForDashboard();
+
+// Each proposal includes linked client:
+proposals.forEach(proposal => {
+  console.log(proposal.client.name);
+  console.log(proposal.client.email);
+});
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Create Proposals" icon="file-text" href="/features/proposals">
+    Link clients to proposals for streamlined workflow
+  </Card>
+  
+  <Card title="Team Settings" icon="building" href="/organization/settings">
+    Configure notification emails for client communications
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/routers/clients">
+    Explore the complete clients API
+  </Card>
+</CardGroup>

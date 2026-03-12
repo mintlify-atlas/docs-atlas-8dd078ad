@@ -1,0 +1,473 @@
+---
+title: Deployment Guide
+description: Deploy Makisala to production with confidence
+---
+
+## Deployment Overview
+
+Makisala is built with Next.js and can be deployed to various platforms. This guide covers deployment best practices and recommended platforms.
+
+## Prerequisites
+
+Before deploying, ensure you have:
+
+- ✅ All tests passing (`bun test`)
+- ✅ No build errors (`bun build`)
+- ✅ Environment variables configured
+- ✅ Database migrations applied
+- ✅ Third-party services set up
+
+## Recommended Platform: Vercel
+
+Vercel is the recommended deployment platform for Makisala as it's built by the creators of Next.js and provides optimal performance.
+
+### Deploy to Vercel
+
+1. **Install Vercel CLI**
+
+```bash
+npm i -g vercel
+```
+
+2. **Login to Vercel**
+
+```bash
+vercel login
+```
+
+3. **Deploy from project root**
+
+```bash
+vercel
+```
+
+4. **Deploy to production**
+
+```bash
+vercel --prod
+```
+
+### Vercel Configuration
+
+Vercel automatically detects Next.js projects. For monorepo setup, configure the root directory:
+
+**Project Settings:**
+- **Framework Preset:** Next.js
+- **Root Directory:** `apps/kitasuro`
+- **Build Command:** `cd ../.. && bun install && cd apps/kitasuro && bun run build`
+- **Output Directory:** `.next`
+- **Install Command:** `bun install`
+
+### Environment Variables
+
+Configure environment variables in Vercel Dashboard under **Settings → Environment Variables**:
+
+#### Required Variables
+
+```bash
+# Application
+NEXT_PUBLIC_APP_URL=https://your-domain.com
+
+# Database
+DATABASE_URL=postgresql://...
+
+# Authentication (Better Auth)
+BETTER_AUTH_SECRET=your-secret-key
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+
+# Supabase
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_KEY=your-service-key
+
+# Storage (Cloudflare R2)
+R2_ACCESS_KEY_ID=your-access-key
+R2_SECRET_ACCESS_KEY=your-secret-key
+R2_ACCOUNT_ID=your-account-id
+R2_BUCKET_NAME=your-bucket-name
+R2_PUBLIC_URL=https://your-r2-domain.com
+
+# Email (Resend)
+RESEND_API_KEY=your-resend-key
+RESEND_FROM_EMAIL=noreply@your-domain.com
+
+# Billing (Polar)
+POLAR_ACCESS_TOKEN=your-polar-token
+POLAR_PRODUCT_ID=your-product-id
+POLAR_STARTER_PRODUCT_ID=your-starter-id
+POLAR_BUSINESS_PRODUCT_ID=your-business-id
+POLAR_WEBHOOK_SECRET=your-webhook-secret
+POLAR_SERVER_MODE=production
+```
+
+#### Environment-Specific Variables
+
+Set different values for:
+- **Production** - Live production environment
+- **Preview** - Pull request previews
+- **Development** - Local development (use `.env.local`)
+
+## Alternative Platforms
+
+### Self-Hosted with Docker
+
+For self-hosted deployments, create a Dockerfile:
+
+```dockerfile
+# Dockerfile
+FROM oven/bun:1 AS base
+WORKDIR /app
+
+# Install dependencies
+COPY package.json bun.lock ./
+COPY apps/kitasuro/package.json ./apps/kitasuro/
+RUN bun install --frozen-lockfile
+
+# Copy source
+COPY . .
+
+# Build application
+WORKDIR /app/apps/kitasuro
+RUN bun run build
+
+# Production image
+FROM oven/bun:1-slim
+WORKDIR /app
+
+COPY --from=base /app/node_modules ./node_modules
+COPY --from=base /app/apps/kitasuro/.next ./apps/kitasuro/.next
+COPY --from=base /app/apps/kitasuro/public ./apps/kitasuro/public
+COPY --from=base /app/apps/kitasuro/package.json ./apps/kitasuro/
+
+WORKDIR /app/apps/kitasuro
+EXPOSE 3000
+
+CMD ["bun", "start"]
+```
+
+**Build and run:**
+
+```bash
+docker build -t makisala .
+docker run -p 3000:3000 --env-file .env.production makisala
+```
+
+### Deploy to Railway
+
+[Railway](https://railway.app) provides a simple deployment experience:
+
+1. Connect your GitHub repository
+2. Set root directory to `apps/kitasuro`
+3. Configure environment variables
+4. Railway auto-deploys on push
+
+### Deploy to Fly.io
+
+[Fly.io](https://fly.io) is great for global edge deployments:
+
+```bash
+# Install flyctl
+curl -L https://fly.io/install.sh | sh
+
+# Login
+flyctl auth login
+
+# Launch app
+flyctl launch
+
+# Deploy
+flyctl deploy
+```
+
+## Database Setup
+
+### PostgreSQL Database
+
+Makisala requires PostgreSQL 14+. Recommended providers:
+
+- **[Supabase](https://supabase.com)** - Managed PostgreSQL with auth
+- **[Neon](https://neon.tech)** - Serverless PostgreSQL
+- **[Railway](https://railway.app)** - PostgreSQL with automatic backups
+
+### Run Migrations
+
+Before deploying, ensure database schema is up to date:
+
+```bash
+cd packages/db
+bun db:push
+```
+
+## Storage Configuration
+
+### Cloudflare R2 Setup
+
+Makisala uses Cloudflare R2 for file storage:
+
+1. **Create R2 bucket** in Cloudflare Dashboard
+2. **Generate API tokens** with R2 permissions
+3. **Configure CORS** for your domain:
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://your-domain.com"],
+    "AllowedMethods": ["GET", "PUT", "POST", "DELETE"],
+    "AllowedHeaders": ["*"],
+    "MaxAgeSeconds": 3000
+  }
+]
+```
+
+4. **Set up custom domain** for public access
+
+### Alternative: AWS S3
+
+To use S3 instead of R2, update the storage configuration in `apps/kitasuro/src/lib/storage.ts`.
+
+## Email Configuration
+
+### Resend Setup
+
+Makisala uses [Resend](https://resend.com) for transactional emails:
+
+1. **Create Resend account**
+2. **Verify your domain**
+3. **Generate API key**
+4. **Set `RESEND_API_KEY` and `RESEND_FROM_EMAIL`**
+
+### Email Templates
+
+Email templates are located in `packages/resend/`. Customize them for your brand.
+
+## Authentication Setup
+
+### Better Auth Configuration
+
+Makisala uses Better Auth with the following providers:
+
+#### Google OAuth
+
+1. **Create Google Cloud project**
+2. **Enable Google+ API**
+3. **Create OAuth credentials**
+4. **Add authorized redirect URIs:**
+   - `https://your-domain.com/api/auth/callback/google`
+5. **Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`**
+
+#### Session Configuration
+
+```typescript
+// Configured in apps/kitasuro/src/lib/auth.ts
+session: {
+  expiresIn: 60 * 60 * 24 * 7, // 7 days
+  updateAge: 60 * 60 * 24,     // 1 day
+}
+```
+
+## Monitoring and Analytics
+
+### Vercel Analytics
+
+Automatically enabled on Vercel for performance monitoring.
+
+### PostHog Analytics
+
+Makisala includes PostHog for product analytics:
+
+```bash
+# Add to environment variables
+NEXT_PUBLIC_POSTHOG_KEY=your-posthog-key
+NEXT_PUBLIC_POSTHOG_HOST=https://app.posthog.com
+```
+
+### Error Tracking with Axiom
+
+Configured via `next-axiom` for centralized logging:
+
+```bash
+NEXT_PUBLIC_AXIOM_DATASET=your-dataset
+NEXT_PUBLIC_AXIOM_TOKEN=your-token
+```
+
+## Build Configuration
+
+### Next.js Configuration
+
+Key configuration in `apps/kitasuro/next.config.ts`:
+
+```typescript
+import type { NextConfig } from 'next';
+
+const config: NextConfig = {
+  reactStrictMode: true,
+  experimental: {
+    optimizePackageImports: ['lucide-react']
+  },
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'your-r2-domain.com'
+      }
+    ]
+  }
+};
+
+export default config;
+```
+
+### TypeScript Configuration
+
+Strict type checking is enabled. Build will fail on type errors:
+
+```bash
+bun run build
+```
+
+## Pre-Deployment Checklist
+
+Before deploying to production:
+
+- [ ] All tests passing (`bun test`)
+- [ ] Build succeeds (`bun build`)
+- [ ] Environment variables configured
+- [ ] Database migrations applied
+- [ ] Storage bucket created and configured
+- [ ] Email service verified
+- [ ] OAuth providers configured
+- [ ] Custom domain configured (if applicable)
+- [ ] SSL certificate active
+- [ ] Monitoring and analytics set up
+
+## Continuous Deployment
+
+### GitHub Actions (CI/CD)
+
+The project includes GitHub Actions workflow for CI:
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun test
+        working-directory: apps/kitasuro
+```
+
+### Automatic Deployments
+
+On Vercel:
+- **Production** deploys automatically from `main` branch
+- **Preview** deploys automatically from pull requests
+
+## Post-Deployment
+
+### Verify Deployment
+
+1. **Check application health**
+   - Visit your domain
+   - Test login flow
+   - Create test data
+
+2. **Monitor performance**
+   - Check Vercel Analytics
+   - Review error logs
+   - Monitor response times
+
+3. **Test integrations**
+   - File uploads (R2)
+   - Email delivery (Resend)
+   - OAuth login (Google)
+
+### Rollback Strategy
+
+On Vercel:
+1. Go to **Deployments** tab
+2. Select previous deployment
+3. Click **Promote to Production**
+
+## Troubleshooting
+
+### Build Failures
+
+**TypeScript errors:**
+```bash
+cd apps/kitasuro
+bun run build
+```
+
+**Dependency issues:**
+```bash
+rm -rf node_modules bun.lock
+bun install
+```
+
+### Runtime Errors
+
+**Check environment variables:**
+- Verify all required variables are set
+- Check for typos in variable names
+- Ensure values are properly formatted
+
+**Database connection issues:**
+- Verify `DATABASE_URL` is correct
+- Check database firewall rules
+- Ensure SSL is enabled if required
+
+### Performance Issues
+
+- Enable Vercel Analytics for insights
+- Check database query performance
+- Review bundle size and optimize imports
+- Use Next.js Image component for images
+
+## Security Best Practices
+
+- ✅ Use environment variables for secrets
+- ✅ Enable HTTPS (automatic on Vercel)
+- ✅ Set secure session configuration
+- ✅ Implement rate limiting
+- ✅ Keep dependencies updated
+- ✅ Use CSP headers for XSS protection
+- ✅ Enable CORS only for trusted domains
+- ✅ Regularly rotate API keys
+
+## Scaling Considerations
+
+### Horizontal Scaling
+
+- Vercel automatically scales based on traffic
+- Database connection pooling recommended
+- Use CDN for static assets
+
+### Database Scaling
+
+- Enable connection pooling (PgBouncer)
+- Add read replicas for read-heavy workloads
+- Consider database indexing optimization
+
+### Caching Strategy
+
+- Leverage Next.js ISR for static content
+- Use React Query for client-side caching
+- Consider Redis for session storage
+
+## Support
+
+For deployment issues:
+- Check [Next.js deployment docs](https://nextjs.org/docs/deployment)
+- Review [Vercel documentation](https://vercel.com/docs)
+- Open an issue on [GitHub](https://github.com/makisala/makisala/issues)

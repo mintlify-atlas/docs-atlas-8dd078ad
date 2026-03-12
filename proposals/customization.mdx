@@ -1,0 +1,413 @@
+---
+title: Customization & Themes
+description: Customize proposal appearance with themes, branding, hero images, and organization settings
+---
+
+## Overview
+
+Makisala provides multiple ways to customize proposal appearance:
+
+- **Themes**: Pre-built design templates
+- **Branding**: Organization logo and colors
+- **Hero Images**: Custom header images
+- **Day Images**: Preview images for each day
+
+## Available Themes
+
+Themes are selected in the Preview step of the proposal builder:
+
+### Minimalistic Theme
+
+```typescript
+// components/themes/MinimalisticTheme.tsx
+export default function MinimalisticTheme({ data }: { data: ItineraryData }) {
+  return (
+    <div className="min-h-screen bg-white">
+      {/* Hero section */}
+      <section className="relative h-[60vh]">
+        {data.heroImage && (
+          <img src={data.heroImage} className="h-full w-full object-cover" />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent to-black/50" />
+        <div className="absolute bottom-0 p-12 text-white">
+          <h1 className="font-serif text-5xl">{data.tourTitle}</h1>
+          <p className="mt-2 text-lg">{data.duration} • {data.startDate}</p>
+        </div>
+      </section>
+      
+      {/* Day-by-day itinerary */}
+      <section className="mx-auto max-w-4xl px-8 py-16">
+        {data.days.map((day) => (
+          <DayCard key={day.dayNumber} day={day} />
+        ))}
+      </section>
+    </div>
+  );
+}
+```
+
+**Characteristics:**
+- Clean, modern design
+- Elegant typography (serif headings)
+- White background with accent colors
+- Linear scroll layout
+- Suitable for professional business proposals
+
+### Kudu Theme
+
+```typescript
+// components/themes/kudu.tsx
+export default function KuduTheme({ data }: { data: ItineraryData }) {
+  return (
+    <div className="snap-y snap-mandatory overflow-y-scroll">
+      {/* Full-screen hero */}
+      <section className="snap-start h-screen bg-black">
+        <img src={data.heroImage} className="h-full w-full object-cover opacity-80" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <h1 className="font-serif text-7xl text-white">{data.tourTitle}</h1>
+        </div>
+      </section>
+      
+      {/* Snap-scroll days */}
+      {data.days.map((day) => (
+        <section key={day.dayNumber} className="snap-start h-screen">
+          <FullscreenDayView day={day} />
+        </section>
+      ))}
+    </div>
+  );
+}
+```
+
+**Characteristics:**
+- Dark, immersive design
+- Snap-scroll experience (full-screen sections)
+- Large, dramatic imagery
+- Minimalist text overlays
+- Best for luxury, high-end experiences
+
+### Discovery Theme
+
+```typescript
+// components/themes/DiscoveryTheme.tsx
+export default function DiscoveryTheme({ data }: { data: ItineraryData }) {
+  return (
+    <div className="flex h-screen">
+      {/* Split-screen layout */}
+      <div className="w-1/2 overflow-y-auto">
+        {/* Content side */}
+        <div className="p-12">
+          <h1 className="font-serif text-4xl">{data.tourTitle}</h1>
+          {data.days.map((day) => (
+            <DayContent key={day.dayNumber} day={day} />
+          ))}
+        </div>
+      </div>
+      
+      <div className="sticky top-0 h-screen w-1/2">
+        {/* Image side - changes based on scroll */}
+        <img src={currentImage} className="h-full w-full object-cover" />
+      </div>
+    </div>
+  );
+}
+```
+
+**Characteristics:**
+- Immersive split-screen layout
+- Full-size images on one side
+- Scrollable content on the other
+- Modern, magazine-style design
+- Great for visual storytelling
+
+## Theme Selection
+
+Themes are selected in the preview page:
+
+```typescript
+// apps/kitasuro/src/app/itineraries/[id]/preview/page.tsx
+const THEME_OPTIONS: { value: ThemeType; label: string; description: string }[] = [
+  {
+    value: 'minimalistic',
+    label: 'Minimalistic',
+    description: 'Clean, modern design with elegant typography',
+  },
+  { 
+    value: 'kudu', 
+    label: 'Kudu', 
+    description: 'Dark, immersive snap-scroll theme' 
+  },
+  {
+    value: 'discovery',
+    label: 'Discovery',
+    description: 'Immersive split-screen layout with full-size images',
+  },
+];
+
+const {
+  selectedTheme,
+  setSelectedTheme
+} = useBuilder();
+
+// Theme picker popover
+<Popover>
+  <PopoverTrigger>
+    <Button>
+      <Palette className="h-4 w-4" />
+      {THEME_OPTIONS.find(t => t.value === selectedTheme)?.label}
+    </Button>
+  </PopoverTrigger>
+  <PopoverContent>
+    {THEME_OPTIONS.map((theme) => (
+      <button
+        key={theme.value}
+        onClick={() => setSelectedTheme(theme.value)}
+        className={selectedTheme === theme.value ? 'bg-green-50' : ''}
+      >
+        {theme.label}
+      </button>
+    ))}
+  </PopoverContent>
+</Popover>
+```
+
+### Theme Access by Plan Tier
+
+Theme availability is controlled by subscription plan:
+
+```typescript
+// lib/plans-config.ts
+export const ALLOWED_THEMES_BY_TIER: Record<string, ThemeType[]> = {
+  free: ['minimalistic'],
+  starter: ['minimalistic', 'kudu'],
+  pro: ['minimalistic', 'kudu', 'discovery'],
+  business: ['minimalistic', 'kudu', 'discovery'],
+};
+
+// Theme validation on save
+const plan = await getOrgPlan(ctx.orgId);
+const allowedThemes = ALLOWED_THEMES_BY_TIER[plan.effectiveTier];
+const validatedTheme = allowedThemes.includes(selectedTheme) 
+  ? selectedTheme 
+  : 'minimalistic';
+```
+
+## Hero Images
+
+### Setting Hero Image
+
+Hero images can be set from the preview page:
+
+```typescript
+const { heroImage, setHeroImage } = useBuilder();
+
+// Open image picker
+const [isHeroPickerOpen, setIsHeroPickerOpen] = useState(false);
+
+<Dialog open={isHeroPickerOpen} onOpenChange={setIsHeroPickerOpen}>
+  <DialogContent className="max-w-5xl">
+    <ImagePickerContent
+      onSelect={(imageUrl) => {
+        setHeroImage(imageUrl);
+        setIsHeroPickerOpen(false);
+      }}
+    />
+  </DialogContent>
+</Dialog>
+```
+
+### Image Picker Event
+
+Themes can trigger the image picker:
+
+```typescript
+// From within a theme component
+const handleOpenPicker = () => {
+  window.dispatchEvent(new CustomEvent('openHeroImagePicker'));
+};
+
+<button onClick={handleOpenPicker}>
+  Change Hero Image
+</button>
+```
+
+## Day Preview Images
+
+Each day can have a preview image:
+
+```typescript
+// Day structure
+interface BuilderDay {
+  dayNumber: number;
+  title: string;
+  previewImage?: string; // Preview image URL
+  // ... other fields
+}
+
+// Set day image from theme
+window.dispatchEvent(
+  new CustomEvent('openDayImagePicker', {
+    detail: { 
+      dayNumber: day.dayNumber,
+      accommodationName: day.accommodation?.name 
+    }
+  })
+);
+```
+
+## Organization Branding
+
+Organization settings control global branding:
+
+```typescript
+export const organizations = pgTable('organizations', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  name: text('name').notNull(),
+  slug: text('slug').notNull().unique(),
+  logoUrl: text('logo_url'),
+  aboutDescription: text('about_description'),
+  paymentTerms: text('payment_terms'),
+  // ...
+});
+
+// Fetch organization settings
+const { data: orgSettings } = trpc.settings.getOrg.useQuery();
+
+// Pass to theme
+const itineraryData = {
+  // ...
+  organization: {
+    name: orgSettings.name,
+    logoUrl: orgSettings.logoUrl,
+    aboutDescription: orgSettings.aboutDescription,
+    paymentTerms: orgSettings.paymentTerms,
+  }
+};
+```
+
+### Using Organization Data in Themes
+
+```typescript
+function ThemeComponent({ data }: { data: ItineraryData }) {
+  return (
+    <>
+      {/* Header with logo */}
+      <header>
+        {data.organization?.logoUrl && (
+          <img src={data.organization.logoUrl} alt="Logo" />
+        )}
+        <span>{data.organization?.name}</span>
+      </header>
+      
+      {/* Footer with payment terms */}
+      <footer>
+        <h3>Payment Terms</h3>
+        <p>{data.organization?.paymentTerms}</p>
+      </footer>
+    </>
+  );
+}
+```
+
+## Image Management
+
+### Organization Image Library
+
+```typescript
+export const organizationImages = pgTable('organization_images', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id').notNull(),
+  name: text('name').notNull(),
+  key: text('key').notNull(), // R2 object key
+  createdAt: timestamp('created_at'),
+});
+
+// Access images via content library
+// URL: /dashboard/content-library
+```
+
+## Proposal Watermark
+
+Free plans show a watermark:
+
+```typescript
+// apps/kitasuro/src/app/proposal/[id]/page.tsx
+const orgPlan = await getOrgPlan(orgId);
+const showWatermark = !orgPlan.limits.noWatermark;
+
+{showWatermark && (
+  <div className="fixed right-4 bottom-4 z-40 rounded-full bg-black/70 px-4 py-2 text-xs text-white shadow-lg backdrop-blur-sm">
+    Powered by Kitasuro
+  </div>
+)}
+```
+
+## Custom CSS & Styling
+
+### Theme-Specific Styles
+
+Each theme has its own styling approach:
+
+```typescript
+// Minimalistic: Utility classes
+<div className="mx-auto max-w-4xl px-8 py-16">
+
+// Kudu: Snap scroll
+<div className="snap-y snap-mandatory overflow-y-scroll h-screen">
+
+// Discovery: Split screen
+<div className="flex h-screen">
+  <div className="w-1/2 overflow-y-auto" />
+  <div className="sticky top-0 h-screen w-1/2" />
+</div>
+```
+
+### Theme Variables
+
+Themes use Tailwind utility classes with consistent color palette:
+
+- **Primary**: `green-600`, `green-700`, `green-800`
+- **Neutral**: `stone-50` through `stone-900`
+- **Background**: `white`, `stone-50`, `black`
+- **Accent**: `amber-500`, `amber-600`
+
+## Comments Overlay
+
+Proposals can have client comments (plan-dependent):
+
+```typescript
+const commentsEnabled = orgPlan.limits.comments;
+
+<CommentsProvider proposalId={id} readOnly={!commentsEnabled}>
+  <CommentsOverlay>
+    {/* Theme component */}
+    <MinimalisticTheme data={transformedData} />
+  </CommentsOverlay>
+</CommentsProvider>
+```
+
+## Best Practices
+
+### Theme Selection
+
+- **Minimalistic**: Professional business clients, multi-destination tours
+- **Kudu**: Luxury lodges, high-end experiences, romantic getaways
+- **Discovery**: Visual storytelling, wildlife photography tours, adventure travel
+
+### Image Guidelines
+
+- **Hero Images**: High-resolution (1920x1080+), landscape orientation
+- **Day Images**: 1200x800+, representative of destination or accommodation
+- **Logo**: SVG or PNG with transparent background, max 200px height
+
+### Branding Consistency
+
+- Set organization logo and description in settings
+- Use consistent hero images across similar tour types
+- Maintain color palette consistency with your brand
+
+## Next Steps
+
+- [Configure pricing and extras](/proposals/pricing)
+- [Share proposals with clients](/proposals/sharing)
+- [Manage tour templates](/tours/templates)

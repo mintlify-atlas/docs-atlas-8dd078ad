@@ -1,0 +1,138 @@
+---
+title: Team Management
+description: Invite members, manage roles, and collaborate with your team
+---
+
+## Team Roles
+
+Makisala supports two roles for organization members:
+
+### Admin
+
+- Full access to all organization features
+- Invite and remove team members
+- Manage organization settings and billing
+- Create, edit, and delete proposals
+- Assign proposals to team members
+- Access client management
+
+### Member
+
+- Create and edit proposals
+- View assigned proposals
+- Access tour templates
+- Upload images to the organization library
+- View clients
+
+<Note>
+  The organization creator is automatically assigned the admin role and cannot be removed from their own organization.
+</Note>
+
+## Inviting Team Members
+
+### How to Invite
+
+1. Navigate to **Settings** > **Team**
+2. Click **Invite Member**
+3. Enter the team member's email address
+4. Select their role (Admin or Member)
+5. Click **Send Invitation**
+
+The invited user will receive an email with an invitation link that expires in **7 days**.
+
+### Invitation Process
+
+**For New Users:**
+- Clicking the invitation link prompts them to create a Makisala account
+- After signup, they're automatically added to your organization
+- No default organization is created for them
+
+**For Existing Users:**
+- Clicking the invitation link adds the organization to their account
+- They can switch between organizations using the organization selector
+
+<Tip>
+  Team invitations are managed through Better Auth's organization plugin, ensuring secure and reliable team collaboration.
+</Tip>
+
+## Managing Invitations
+
+### Invitation Statuses
+
+- **Pending**: Invitation sent, awaiting acceptance
+- **Accepted**: User has joined the organization
+- **Expired**: Invitation link has expired (7 days)
+- **Revoked**: Admin canceled the invitation
+
+### Revoking Invitations
+
+You can cancel pending invitations before they're accepted:
+
+1. Go to **Settings** > **Team**
+2. Find the pending invitation
+3. Click **Revoke**
+
+Revoked invitations cannot be accepted, and the invitation link becomes invalid.
+
+## Removing Team Members
+
+<Warning>
+  Only admins can remove team members from the organization.
+</Warning>
+
+To remove a member:
+
+1. Navigate to **Settings** > **Team**
+2. Find the member you want to remove
+3. Click **Remove** next to their name
+4. Confirm the removal
+
+When a member is removed:
+- They lose access to the organization immediately
+- Proposals they created remain in the organization
+- Their assignments are removed from proposals
+
+## Changing Member Roles
+
+Admins can change team member roles:
+
+1. Go to **Settings** > **Team**
+2. Find the member
+3. Change their role from the dropdown
+4. Changes take effect immediately
+
+## Proposal Assignments
+
+Team members can be assigned to specific proposals for collaboration:
+
+- Admins can assign any proposal to any team member
+- Assigned members receive notifications about proposal updates
+- Multiple team members can be assigned to a single proposal
+- Assignment history is tracked (who assigned whom and when)
+
+<Info>
+  Learn more about proposal collaboration in the [Proposals](/proposals/overview) documentation.
+</Info>
+
+## Multiple Organizations
+
+Users can belong to multiple organizations:
+
+- Switch between organizations using the organization selector in the navigation
+- Each organization has its own proposals, clients, and settings
+- Your active organization is saved in your session
+
+## Team Limits by Plan
+
+Different subscription plans have different team member limits:
+
+| Plan | Team Members |
+|------|-------------|
+| Free | 1 (owner only) |
+| Starter | Up to 3 |
+| Pro | Up to 10 |
+| Business | Unlimited |
+
+<Note>
+  See [Billing & Subscriptions](/organization/billing) for more details on plan features.
+</Note>

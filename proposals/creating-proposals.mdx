@@ -1,0 +1,391 @@
+---
+title: Creating Proposals
+description: Learn how to create professional travel proposals in Makisala from tour templates and clients
+---
+
+## Overview
+
+Proposals in Makisala transform tour templates into personalized, client-ready documents. Each proposal is built from a tour template and customized with client information, dates, pricing, and activities.
+
+## Proposal Data Structure
+
+Proposals are stored in the `proposals` table with the following core structure:
+
+```typescript
+export const proposals = pgTable('proposals', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  tourId: uuid('tour_id').notNull().references(() => tours.id),
+  clientId: uuid('client_id').references(() => clients.id),
+  organizationId: uuid('organization_id').references(() => organizations.id),
+  
+  // Basic info
+  tourTitle: text('tour_title'),
+  tourType: text('tour_type'), // 'Private Tour', 'Group Tour', 'Self-drive'
+  theme: text('theme').default('minimalistic'),
+  heroImage: text('hero_image'),
+  
+  // Travel details
+  startDate: timestamp('start_date'),
+  startCity: text('start_city'),
+  startCityLat: numeric('start_city_lat'),
+  startCityLng: numeric('start_city_lng'),
+  endCity: text('end_city'),
+  endCityLat: numeric('end_city_lat'),
+  endCityLng: numeric('end_city_lng'),
+  
+  // Logistics
+  pickupPoint: text('pickup_point'),
+  transferIncluded: text('transfer_included'),
+  
+  // Pricing (stored as JSON)
+  pricingRows: json('pricing_rows'),
+  extras: json('extras'),
+  travelerGroups: json('traveler_groups'),
+  
+  // Trip details
+  countries: text('countries').array(),
+  inclusions: text('inclusions').array(),
+  exclusions: text('exclusions').array(),
+  hidePricing: boolean('hide_pricing').default(false),
+  
+  status: ProposalStatus('status').default('draft'),
+  createdAt: timestamp('created_at'),
+  updatedAt: timestamp('updated_at'),
+});
+```
+
+## Creating a New Proposal
+
+### From the Dashboard
+
+Users can create proposals from the dashboard using the tour template browser:
+
+```typescript
+// URL pattern for new proposals
+/itineraries/new?tourId={tour_id}&clientId={client_id}&startDate={iso_date}&travelers={count}
+```
+
+### Using the API
+
+Proposals are created/updated via the tRPC `proposals.save` mutation:
+
+```typescript
+// apps/kitasuro/src/server/trpc/routers/proposals.ts
+save: protectedProcedure
+  .input(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      data: z.record(z.string(), z.unknown()),
+      status: z.enum(['draft', 'shared']).optional(),
+      tourId: z.string(),
+    })
+  )
+  .mutation(async ({ ctx, input }) => {
+    // Generate ID if new
+    let proposalId = input.id;
+    if (!proposalId || proposalId.trim() === '') {
+      const { randomUUID } = await import('crypto');
+      proposalId = randomUUID();
+    }
+
+    // Save proposal data
+    await ctx.db.insert(proposals).values({
+      id: proposalId,
+      name: input.name,
+      tourId: input.tourId,
+      organizationId: ctx.orgId,
+      // ... more fields
+    }).onConflictDoUpdate({ /* ... */ });
+
+    return { success: true, id: proposalId };
+  })
+```
+
+## Proposal Days
+
+Each proposal has multiple days stored in the `proposal_days` table:
+
+```typescript
+export const proposalDays = pgTable('proposal_days', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  proposalId: text('proposal_id').notNull().references(() => proposals.id),
+  dayNumber: integer('day_number').notNull(),
+  title: text('title'),
+  description: text('description'),
+  previewImage: text('preview_image'),
+  
+  // Destination
+  nationalParkId: uuid('national_park_id').references(() => nationalParks.id),
+  destinationName: text('destination_name'),
+  destinationLat: numeric('destination_lat'),
+  destinationLng: numeric('destination_lng'),
+});
+```
+
+### Related Day Data
+
+Each day can have:
+
+- **Activities** (`proposal_activities`): Tours, game drives, experiences
+- **Accommodations** (`proposal_accommodations`): Where travelers stay
+- **Meals** (`proposal_meals`): Breakfast, lunch, dinner included
+- **Transportation** (`proposal_transportation`): Travel between destinations
+
+## Activities
+
+```typescript
+export const proposalActivities = pgTable('proposal_activities', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  proposalDayId: uuid('proposal_day_id').notNull(),
+  name: text('name').notNull(),
+  description: text('description'),
+  location: text('location'),
+  moment: text('moment').notNull(), // 'Morning', 'Afternoon', 'Evening', etc.
+  isOptional: boolean('is_optional').default(false),
+  imageUrl: text('image_url'),
+});
+```
+
+### Activity Moments
+
+Activities are organized by time of day:
+
+- `Morning`
+- `Afternoon`
+- `Evening`
+- `Half Day`
+- `Full Day`
+- `Night`
+
+## Transportation
+
+```typescript
+export const proposalTransportation = pgTable('proposal_transportation', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  proposalDayId: uuid('proposal_day_id').notNull(),
+  originName: text('origin_name').notNull(),
+  destinationName: text('destination_name').notNull(),
+  mode: TransportMode('mode').notNull(),
+  durationMinutes: integer('duration_minutes'),
+  distanceKm: integer('distance_km'),
+  notes: text('notes'),
+});
+
+export const TransportMode = pgEnum('transport_mode', [
+  'road_4x4',
+  'road_shuttle',
+  'road_bus',
+  'flight_domestic',
+  'flight_bush',
+]);
+```
+
+## Proposal Builder Workflow
+
+The proposal builder follows a 4-step process:
+
+### 1. Day-by-Day (`/itineraries/[id]/day-by-day`)
+
+Configure travel logistics and daily itinerary:
+
+```typescript
+// Set tour logistics
+const {
+  startDate,        // Tour start date
+  setStartDate,
+  startCity,        // Starting location
+  endCity,          // Ending location
+  pickupPoint,      // Pickup details
+  transferIncluded, // Airport transfer
+  days,             // Array of daily itineraries
+  setDays,
+} = useBuilder();
+
+// Each day includes:
+{
+  dayNumber: 1,
+  title: "Arrival in Nairobi",
+  date: "Jun 15",
+  destination: "uuid-or-geo-string",
+  accommodation: "accommodation-uuid",
+  activities: [...],
+  meals: { breakfast: true, lunch: true, dinner: true },
+  transfer: { originName, destinationName, mode, ... }
+}
+```
+
+### 2. Pricing (`/itineraries/[id]/pricing`)
+
+Configure pricing, extras, and inclusions:
+
+```typescript
+const {
+  pricingRows,      // Base pricing per traveler type
+  setPricingRows,
+  extras,           // Optional add-ons
+  setExtras,
+  inclusions,       // What's included
+  setInclusions,
+  exclusions,       // What's excluded
+  setExclusions,
+  hidePricing,      // Hide prices in final proposal
+  setHidePricing,
+} = useBuilder();
+
+// Pricing row structure
+{
+  id: "row-1",
+  count: 2,
+  type: "Adult",
+  unitPrice: 3500
+}
+
+// Extra structure
+{
+  id: "extra-1",
+  name: "Hot Air Balloon Safari",
+  price: 450,
+  selected: true
+}
+```
+
+### 3. Preview (`/itineraries/[id]/preview`)
+
+Preview the proposal with theme selection:
+
+```typescript
+const {
+  selectedTheme,     // Theme: 'minimalistic', 'kudu', 'discovery'
+  setSelectedTheme,
+  heroImage,         // Hero image URL
+  setHeroImage,
+} = useBuilder();
+
+// Themes available:
+// - minimalistic: Clean, modern design
+// - kudu: Dark, immersive snap-scroll
+// - discovery: Split-screen with full-size images
+```
+
+### 4. Share (`/itineraries/[id]/share`)
+
+Publish and share the proposal:
+
+```typescript
+// Auto-publish on page load
+autoPublishMutation.mutate();
+
+// Proposal URL format
+const proposalUrl = `${origin}/proposal/${proposalId}`;
+
+// Email client
+sendEmailMutation.mutate({
+  proposalId,
+  recipientEmail,
+  subject,
+  message,
+  isTest: false
+});
+```
+
+## Saving Proposals
+
+### Save as Draft
+
+```typescript
+const saveDraftMutation = trpc.proposals.save.useMutation();
+
+await saveDraftMutation.mutateAsync({
+  id: proposalId,
+  name: tourTitle || 'Untitled Safari',
+  data: {
+    days,
+    startDate,
+    travelerGroups,
+    tourType,
+    pricingRows,
+    extras,
+    clientId,
+    tourTitle,
+    startCity,
+    startCityLat,
+    startCityLng,
+    endCity,
+    pickupPoint,
+    transferIncluded,
+    inclusions,
+    exclusions,
+    hidePricing,
+    selectedTheme,
+    heroImage,
+  },
+  status: 'draft',
+  tourId: tourId,
+});
+```
+
+### Publish Proposal
+
+```typescript
+// Same as save, but with status: 'shared'
+await saveProposalMutation.mutateAsync({
+  id: proposalId,
+  name: tourTitle,
+  data: { /* ... */ },
+  status: 'shared', // Makes it publicly accessible
+  tourId: tourId,
+});
+```
+
+## Proposal Assignments
+
+Proposals can be assigned to team members:
+
+```typescript
+export const proposalAssignments = pgTable('proposal_assignments', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  proposalId: text('proposal_id').notNull(),
+  userId: text('user_id').notNull(),
+  assignedBy: text('assigned_by'),
+  createdAt: timestamp('created_at'),
+});
+
+// Assign proposal to user
+await trpc.proposals.assign.mutate({
+  proposalId: 'proposal-uuid',
+  userId: 'user-uuid'
+});
+```
+
+## Loading Proposals
+
+### For Editing
+
+```typescript
+const { data: proposal } = trpc.proposals.getForBuilder.useQuery(
+  { id: proposalId },
+  { enabled: !!proposalId }
+);
+
+// Returns full proposal data including:
+// - Basic info (name, title, type, theme)
+// - Days with activities, accommodations, meals, transportation
+// - Pricing, extras, inclusions, exclusions
+```
+
+### For Public Viewing
+
+```typescript
+const proposal = await trpc.proposals.getById({ id: proposalId });
+
+// Public endpoint - no authentication required
+// Used for client viewing at /proposal/[id]
+```
+
+## Next Steps
+
+- [Customize themes and branding](/proposals/customization)
+- [Set up pricing calculator](/proposals/pricing)
+- [Share proposals with clients](/proposals/sharing)

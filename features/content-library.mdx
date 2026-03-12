@@ -1,0 +1,405 @@
+---
+title: Content Library
+description: Manage accommodations, activities, images, and other reusable content
+icon: 'images'
+---
+
+## Overview
+
+The Content Library is your centralized hub for managing all reusable content across proposals. Store accommodations, upload images, manage activities, and access destination data.
+
+<Note>
+  All content is organization-specific except for shared accommodations from the global database.
+</Note>
+
+## Accommodations
+
+A curated database of lodges, hotels, camps, and other accommodations.
+
+### Accommodation Data Structure
+
+```typescript schema.ts:434-450
+{
+  id: "accommodation-uuid",
+  name: "Serengeti Serena Safari Lodge",
+  url: "https://www.serenahotels.com/serengeti",
+  overview: "Perched high on a hill...",
+  description: "Detailed property description",
+  latitude: -2.3333,
+  longitude: 34.8333,
+  
+  // AI-enhanced content
+  enhancedDescription: "AI-generated marketing copy",
+  amenities: [
+    { category: "Dining", items: ["Restaurant", "Bar", "Room service"] },
+    { category: "Facilities", items: ["Pool", "Spa", "WiFi"] }
+  ],
+  roomTypes: [
+    { name: "Standard Room", description: "Comfortable rooms with...", capacity: "2 adults" },
+    { name: "Suite", description: "Spacious suites with...", capacity: "4 people" }
+  ],
+  locationHighlights: [
+    "Central Serengeti location",
+    "Overlooking the plains",
+    "Near Seronera Valley"
+  ],
+  pricingInfo: "From $400 per person per night",
+  country: "Tanzania"
+}
+```
+
+### Browse Accommodations
+
+```typescript contentLibrary.ts:34-80
+const result = await trpc.contentLibrary.getAccommodationsWithStatus({
+  page: 1,
+  limit: 20,
+  query: "serengeti"  // Search by name
+});
+
+const { accommodations, pagination } = result;
+// accommodations: [{ id, name, url, imageUrl }, ...]
+// pagination: { page, limit, total, totalPages }
+```
+
+Each accommodation includes:
+- 🏨 Name and URL
+- 📸 Featured image (first from image collection)
+- 🔗 Direct link for more details
+
+### Accommodation Images
+
+Accommodations support multiple images:
+
+```typescript schema.ts:458-469
+// accommodation_images table
+{
+  id: "image-uuid",
+  accommodationId: "accommodation-uuid",
+  bucket: "accommodations",
+  key: "path/to/image.webp"
+}
+```
+
+Images are stored in cloud storage (R2) with public URLs generated via:
+
+```typescript storage.ts
+const imageUrl = getPublicUrl(bucket, key);
+```
+
+## Organization Images
+
+Upload and manage your own image library.
+
+### Upload Images
+
+```typescript contentLibrary.ts:136-188
+const result = await trpc.contentLibrary.uploadImage({
+  name: "serengeti-sunset.jpg",
+  type: "image/jpeg",  // image/jpeg, image/png, image/webp, image/gif
+  base64: "base64-encoded-image-data"
+});
+
+// Returns: { id, name, url }
+```
+
+<Info>
+  **Upload Limits**
+  - Maximum file size: 10MB
+  - Allowed formats: JPEG, PNG, WebP, GIF
+  - Images are automatically compressed and optimized
+  - Feature may be restricted by plan tier
+</Info>
+
+### Image Processing
+
+Uploaded images are automatically processed:
+
+```typescript image-utils.ts
+// Automatic compression
+const compressed = await compressImage(rawBuffer);
+
+// Extension update (e.g., .jpg → .webp if converted)
+const compressedName = replaceExtension(originalName, compressed.extension);
+```
+
+Images are stored with organized paths:
+
+```typescript contentLibrary.ts:158
+const key = `organizations/${orgId}/images/${timestamp}-${filename}`;
+```
+
+### List Organization Images
+
+Cursor-based pagination for infinite scroll:
+
+```typescript contentLibrary.ts:82-134
+const result = await trpc.contentLibrary.getOrgImages({
+  cursor: undefined,  // or previous cursor
+  limit: 20           // max 100
+});
+
+const { images, nextCursor } = result;
+// images: [{ id, name, key, url, createdAt }, ...]
+// nextCursor: "base64-encoded-cursor" or null
+```
+
+Cursor encoding uses a combination of ID and timestamp:
+
+```typescript contentLibrary.ts:15-30
+function encodeCursor(id: string, createdAt: Date): string {
+  return Buffer.from(`${id}:${createdAt.toISOString()}`).toString('base64url');
+}
+```
+
+This approach ensures:
+- ✅ Consistent pagination during concurrent uploads
+- ✅ Efficient queries (no OFFSET)
+- ✅ Stable sort order
+
+### Delete Images
+
+```typescript contentLibrary.ts:190-217
+await trpc.contentLibrary.deleteImage({ imageId: "image-uuid" });
+
+// Deletes from both:
+// 1. Cloud storage (R2)
+// 2. Database record
+```
+
+<Warning>
+  Deleted images cannot be recovered. Images currently used in proposals will show broken links.
+</Warning>
+
+## Activity Library
+
+Manage reusable activities for your itineraries.
+
+### Activity Structure
+
+```typescript schema.ts:970-978
+{
+  id: "activity-uuid",
+  name: "Game Drive",
+  description: "Morning safari drive through the park",
+  imageUrl: "https://...",
+  organizationId: "org-uuid",  // or null for global activities
+  isGlobal: false
+}
+```
+
+### Search Activities
+
+```typescript activities.ts:8-38
+const activities = await trpc.activities.search({
+  query: "game",  // Search by name
+  limit: 10       // Max 100
+});
+
+// Returns activities from:
+// - Global activity library (isGlobal=true)
+// - Your organization's activities
+```
+
+### Create Custom Activity
+
+```typescript activities.ts:40-60
+const activity = await trpc.activities.create({
+  name: "Hot Air Balloon Safari"
+});
+
+// Returns: { id, name }
+```
+
+<Tip>
+  Custom activities are private to your organization. Use descriptive names for easy searching later.
+</Tip>
+
+## National Parks
+
+Access detailed information about destinations and national parks.
+
+### Park Data
+
+```typescript schema.ts:518-539
+{
+  id: "park-uuid",
+  name: "Serengeti National Park",
+  country: "Tanzania",
+  destination_id: "destination-uuid",
+  latitude: -2.3333,
+  longitude: 34.8333,
+  
+  // Content pages
+  overview_page_id: "page-uuid",
+  wildlife_page_id: "page-uuid",
+  best_time_to_visit_id: "page-uuid",
+  weather_page_id: "page-uuid",
+  malaria_safety_page_id: "page-uuid",
+  how_to_get_there_page_id: "page-uuid",
+  
+  // Structured data
+  wildlife_highlights: [
+    { name: "Lion", abundance: "Abundant" },
+    { name: "Leopard", abundance: "common" },
+    { name: "Cheetah", abundance: "occasional" }
+  ],
+  park_overview: [
+    { name: "Size", description: "14,763 km²" },
+    { name: "Best Time", description: "June to October" }
+  ]
+}
+```
+
+### Destinations
+
+Higher-level destination information:
+
+```typescript schema.ts:508-516
+{
+  id: "destination-uuid",
+  name: "Tanzania",
+  overall_page_url: "https://...",
+  best_time_to_visit: "June to October for migration",
+  travel_advice: "Visa required for most nationalities",
+  destination_costs: "Mid to high range",
+  where_to_go: "Northern circuit recommended for first-timers"
+}
+```
+
+## Storage Architecture
+
+### Cloud Storage (R2)
+
+Images are stored in Cloudflare R2:
+
+```typescript storage.ts
+await uploadToStorage({
+  file: buffer,
+  contentType: "image/webp",
+  key: "organizations/org-id/images/filename.webp",
+  visibility: "public"
+});
+```
+
+Public URLs are generated on-demand:
+
+```typescript
+const url = getPublicUrl(bucket, key);
+// Returns: "https://cdn.example.com/path/to/image.webp"
+```
+
+### Database References
+
+The database stores metadata and references:
+
+```typescript schema.ts:153-161
+export const organizationImages = pgTable('organization_images', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  organizationId: uuid('organization_id').notNull(),
+  name: text('name').notNull(),      // Display name
+  key: text('key').notNull(),        // Storage path
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+```
+
+## Plan Restrictions
+
+Some content library features are plan-gated:
+
+```typescript contentLibrary.ts:145-148
+const access = await checkFeatureAccess(ctx.orgId, 'uploadImages');
+if (!access.allowed) {
+  throw new TRPCError({ code: 'FORBIDDEN', message: access.reason });
+}
+```
+
+Check your plan for:
+- 📤 Upload image limits
+- 💾 Storage capacity
+- 🔢 Number of custom activities
+
+## Performance Optimizations
+
+### Image Compression
+
+Automatic optimization reduces bandwidth:
+
+```typescript image-utils.ts
+const compressed = await compressImage(rawBuffer);
+// Converts to WebP when beneficial
+// Reduces quality while maintaining visual fidelity
+// Can reduce file sizes by 50-80%
+```
+
+### Pagination Strategies
+
+**Accommodations**: Offset-based (traditional)
+```typescript
+offset = (page - 1) * limit
+```
+Good for: Smaller datasets, page numbers
+
+**Organization Images**: Cursor-based
+```typescript
+where: lt(createdAt, cursorDate)
+```
+Good for: Real-time updates, infinite scroll
+
+### Indexes
+
+```typescript schema.ts:468
+index('idx_accommodation_images_accommodation_id').on(table.accommodationId)
+```
+
+Optimizes queries for:
+- Fetching all images for an accommodation
+- Counting accommodation images
+- Deleting accommodation images
+
+## Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Optimize Before Upload" icon="compress">
+    Compress images before uploading to stay within plan limits. The system compresses automatically, but pre-optimization helps.
+  </Card>
+  
+  <Card title="Descriptive Names" icon="tag">
+    Use clear, searchable names for images and activities to find them easily later.
+  </Card>
+  
+  <Card title="Leverage Global Content" icon="globe">
+    Use shared accommodations and activities when available to save time and storage.
+  </Card>
+  
+  <Card title="Regular Audits" icon="list-check">
+    Periodically review and remove unused images to optimize storage usage.
+  </Card>
+</CardGroup>
+
+## Data Model Summary
+
+Key tables from `/workspace/source/packages/db/src/schema.ts`:
+
+- **accommodations** (434-450): Lodge/hotel database
+- **accommodationImages** (458-469): Photos for accommodations
+- **organizationImages** (153-161): Your uploaded images
+- **activityLibrary** (970-978): Reusable activities
+- **nationalParks** (518-539): Destination information
+- **destinations** (508-516): Country-level data
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Use in Proposals" icon="file-text" href="/features/proposals">
+    Add accommodations and images to your client proposals
+  </Card>
+  
+  <Card title="Tour Templates" icon="map" href="/features/tours">
+    Build tours with activities and accommodations
+  </Card>
+  
+  <Card title="API Reference" icon="code" href="/api/introduction">
+    Explore the full tRPC API documentation
+  </Card>
+</CardGroup>

@@ -1,0 +1,252 @@
+---
+title: 'Environment Variables'
+description: 'Configure environment variables for local development'
+---
+
+## Overview
+
+Makisala uses type-safe environment variables powered by [@t3-oss/env-nextjs](https://env.t3.gg/) and [Zod](https://zod.dev/) for validation.
+
+Environment variables are validated at build time and runtime, ensuring your application has all required configuration before starting.
+
+## Environment File Structure
+
+Create a `.env` file in the root of your project:
+
+```bash
+touch .env
+```
+
+## Required Variables
+
+### Database
+
+<ParamField path="DATABASE_URL" type="string" required>
+  PostgreSQL connection string for the database.
+  
+  **Format:** `postgresql://username:password@host:port/database`
+  
+  **Example:**
+  ```bash
+  DATABASE_URL="postgresql://postgres:password@localhost:5432/makisala"
+  ```
+</ParamField>
+
+### Cloudinary (Image Management)
+
+<ParamField path="CLOUDINARY_CLOUD_NAME" type="string" required>
+  Your Cloudinary cloud name for image uploads and management.
+  
+  **Example:**
+  ```bash
+  CLOUDINARY_CLOUD_NAME="your-cloud-name"
+  ```
+</ParamField>
+
+<ParamField path="CLOUDINARY_API_KEY" type="string" required>
+  Cloudinary API key for authentication.
+  
+  **Example:**
+  ```bash
+  CLOUDINARY_API_KEY="123456789012345"
+  ```
+</ParamField>
+
+<ParamField path="CLOUDINARY_API_SECRET" type="string" required>
+  Cloudinary API secret for secure operations.
+  
+  **Example:**
+  ```bash
+  CLOUDINARY_API_SECRET="your-api-secret"
+  ```
+</ParamField>
+
+### Authentication
+
+<ParamField path="NEXT_PUBLIC_BETTER_AUTH_URL" type="string" required>
+  Public URL for Better Auth authentication service.
+  
+  **Example:**
+  ```bash
+  NEXT_PUBLIC_BETTER_AUTH_URL="http://localhost:3000/api/auth"
+  ```
+</ParamField>
+
+### Analytics & Monitoring
+
+<ParamField path="NEXT_PUBLIC_POSTHOG_KEY" type="string" required>
+  PostHog project API key for analytics tracking.
+  
+  **Example:**
+  ```bash
+  NEXT_PUBLIC_POSTHOG_KEY="phc_xxxxxxxxxxxxxxxxxxxxx"
+  ```
+</ParamField>
+
+<ParamField path="NEXT_PUBLIC_POSTHOG_HOST" type="string" required>
+  PostHog instance host URL.
+  
+  **Example:**
+  ```bash
+  NEXT_PUBLIC_POSTHOG_HOST="https://app.posthog.com"
+  ```
+</ParamField>
+
+<ParamField path="NEXT_PUBLIC_AXIOM_DATASET" type="string" required>
+  Axiom dataset name for logging.
+  
+  **Example:**
+  ```bash
+  NEXT_PUBLIC_AXIOM_DATASET="makisala"
+  ```
+</ParamField>
+
+<ParamField path="NEXT_PUBLIC_AXIOM_TOKEN" type="string" required>
+  Axiom API token for log ingestion.
+  
+  **Example:**
+  ```bash
+  NEXT_PUBLIC_AXIOM_TOKEN="xaat-xxxxxxxxxxxxx"
+  ```
+</ParamField>
+
+## Complete Example
+
+Here's a complete `.env` file template:
+
+```bash .env
+# Database
+DATABASE_URL="postgresql://postgres:password@localhost:5432/makisala"
+
+# Cloudinary
+CLOUDINARY_CLOUD_NAME="your-cloud-name"
+CLOUDINARY_API_KEY="123456789012345"
+CLOUDINARY_API_SECRET="your-api-secret"
+
+# Authentication
+NEXT_PUBLIC_BETTER_AUTH_URL="http://localhost:3000/api/auth"
+
+# PostHog Analytics
+NEXT_PUBLIC_POSTHOG_KEY="phc_xxxxxxxxxxxxxxxxxxxxx"
+NEXT_PUBLIC_POSTHOG_HOST="https://app.posthog.com"
+
+# Axiom Logging
+NEXT_PUBLIC_AXIOM_DATASET="makisala"
+NEXT_PUBLIC_AXIOM_TOKEN="xaat-xxxxxxxxxxxxx"
+```
+
+## Environment Variable Scopes
+
+Makisala uses two types of environment variables:
+
+### Server-Side Variables
+
+These are only available on the server and never exposed to the client:
+
+- `DATABASE_URL`
+- `CLOUDINARY_CLOUD_NAME`
+- `CLOUDINARY_API_KEY`
+- `CLOUDINARY_API_SECRET`
+
+### Client-Side Variables
+
+These are prefixed with `NEXT_PUBLIC_` and accessible in the browser:
+
+- `NEXT_PUBLIC_BETTER_AUTH_URL`
+- `NEXT_PUBLIC_POSTHOG_KEY`
+- `NEXT_PUBLIC_POSTHOG_HOST`
+- `NEXT_PUBLIC_AXIOM_DATASET`
+- `NEXT_PUBLIC_AXIOM_TOKEN`
+
+<Warning>
+  Never expose sensitive credentials like database passwords or API secrets as `NEXT_PUBLIC_` variables. They will be visible in the browser.
+</Warning>
+
+## Validation
+
+Environment variables are validated using Zod schemas defined in:
+
+- `apps/makisala/src/lib/env.ts` - Main application environment
+- `packages/db/src/env.ts` - Database package environment
+
+The validation happens automatically when you import the `env` object:
+
+```typescript
+import { env } from './lib/env'
+
+// TypeScript knows the exact shape and validates at runtime
+console.log(env.DATABASE_URL) // string & url validated
+```
+
+### Validation Features
+
+- **Type Safety**: Full TypeScript autocomplete and type checking
+- **Runtime Validation**: Validates environment variables on startup
+- **Helpful Errors**: Clear error messages when variables are missing or invalid
+- **Empty String Handling**: Empty strings are treated as undefined
+
+## Different Environments
+
+### Development
+
+Use `.env` for local development (already covered above).
+
+### Production
+
+For production deployments on Vercel or other platforms:
+
+1. Set environment variables in your hosting platform's dashboard
+2. Never commit `.env` files to version control
+3. Use secure secret management for sensitive values
+
+### Testing
+
+Create a `.env.test` file for testing:
+
+```bash
+DATABASE_URL="postgresql://postgres:password@localhost:5432/makisala_test"
+# ... other test-specific variables
+```
+
+## Troubleshooting
+
+### Missing Environment Variables
+
+If you see an error about missing environment variables:
+
+1. Check that your `.env` file exists in the project root
+2. Verify all required variables are present
+3. Restart the development server after adding variables
+
+### Invalid Format
+
+If validation fails:
+
+- Ensure `DATABASE_URL` is a valid URL format
+- Check that all required fields are filled (no empty strings)
+- Verify string values don't have extra quotes
+
+### Variables Not Loading
+
+If environment variables aren't being recognized:
+
+```bash
+# Restart the dev server
+bun run dev
+```
+
+## Security Best Practices
+
+<Card title="Keep Secrets Safe" icon="shield">
+  1. Never commit `.env` files to git (add to `.gitignore`)
+  2. Use different credentials for development and production
+  3. Rotate secrets regularly
+  4. Use secure secret management in production (e.g., Vercel Environment Variables)
+</Card>
+
+## Next Steps
+
+- Set up your [database](/development/database)
+- Configure [Cloudinary](https://cloudinary.com/) for image management
+- Set up [PostHog](https://posthog.com/) for analytics
+- Configure [Axiom](https://axiom.co/) for logging

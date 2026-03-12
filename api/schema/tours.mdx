@@ -1,0 +1,288 @@
+---
+title: 'Tours Schema'
+description: 'Database schema for tours, itinerary days, accommodations, and activities'
+---
+
+## tours
+
+Tour templates and organization-specific tours.
+
+<ParamField path="id" type="uuid" required>
+  Unique identifier for the tour (auto-generated)
+</ParamField>
+
+<ParamField path="tourName" type="text" required>
+  Name of the tour (unique per organization)
+</ParamField>
+
+<ParamField path="slug" type="text">
+  URL-friendly slug for the tour
+</ParamField>
+
+<ParamField path="overview" type="text" required>
+  Overview description of the tour
+</ParamField>
+
+<ParamField path="pricing" type="numeric" required>
+  Base pricing for the tour (precision: 12, scale: 2)
+</ParamField>
+
+<ParamField path="country" type="text" required>
+  Primary country for the tour
+</ParamField>
+
+<ParamField path="sourceUrl" type="text">
+  Optional URL where tour data was sourced from
+</ParamField>
+
+<ParamField path="activities" type="json" required>
+  Activities included in the tour as JSON array
+  
+  ```typescript
+  Array<{ title: string; activity_name: string }>
+  ```
+</ParamField>
+
+<ParamField path="topFeatures" type="json" required>
+  Top features and highlights as JSON array
+  
+  ```typescript
+  Array<{ title: string; description: string }>
+  ```
+</ParamField>
+
+<ParamField path="img_url" type="text" required>
+  URL to the tour's main image
+</ParamField>
+
+<ParamField path="number_of_days" type="integer" required>
+  Duration of the tour in days
+</ParamField>
+
+<ParamField path="tags" type="text[]" required>
+  Array of tags for categorization (e.g., `family`, `group`, `luxury`)
+</ParamField>
+
+<ParamField path="organizationId" type="uuid">
+  Reference to the organization ID (cascade delete)
+  
+  **Note**: `null` indicates a shared template, UUID indicates organization-specific tour
+</ParamField>
+
+<ParamField path="clonedFromId" type="uuid">
+  Reference to the template tour ID this was cloned from (set null on delete)
+</ParamField>
+
+<ParamField path="createdAt" type="timestamp">
+  Timestamp when the tour was created (auto-generated with timezone)
+</ParamField>
+
+<ParamField path="updatedAt" type="timestamp">
+  Timestamp when the tour was last updated (auto-generated with timezone)
+</ParamField>
+
+### Relations
+
+- **days**: One-to-many relationship with `itineraryDays` table
+- **organization**: Many-to-one relationship with `organizations` table
+- **clonedFrom**: Self-referencing relationship to parent tour template
+- **clones**: One-to-many relationship with tours cloned from this template
+
+---
+
+## itineraryDays
+
+Daily itinerary breakdown for tours.
+
+<ParamField path="id" type="uuid" required>
+  Unique identifier for the itinerary day (auto-generated)
+</ParamField>
+
+<ParamField path="tourId" type="uuid" required>
+  Reference to the tour ID (cascade delete)
+</ParamField>
+
+<ParamField path="dayNumber" type="integer" required>
+  Day number in the tour sequence
+</ParamField>
+
+<ParamField path="dayTitle" type="text">
+  Title for the itinerary day
+</ParamField>
+
+<ParamField path="overview" type="text">
+  Overview description of the day's activities
+</ParamField>
+
+<ParamField path="national_park_id" type="uuid">
+  Reference to the national park visited on this day
+</ParamField>
+
+### Relations
+
+- **tour**: Many-to-one relationship with `tours` table
+- **itineraryAccommodations**: One-to-many relationship with `itineraryAccommodations` table
+
+---
+
+## accommodations
+
+Master accommodations table with deduplicated accommodation data.
+
+<ParamField path="id" type="uuid" required>
+  Unique identifier for the accommodation (auto-generated)
+</ParamField>
+
+<ParamField path="name" type="text" required>
+  Name of the accommodation
+</ParamField>
+
+<ParamField path="url" type="text">
+  URL to the accommodation's website (e.g., hotel website)
+</ParamField>
+
+<ParamField path="overview" type="text">
+  Scraped overview of the accommodation
+</ParamField>
+
+<ParamField path="description" type="text">
+  General description of the accommodation
+</ParamField>
+
+<ParamField path="latitude" type="numeric">
+  Latitude coordinate (precision: 10, scale: 7)
+</ParamField>
+
+<ParamField path="longitude" type="numeric">
+  Longitude coordinate (precision: 10, scale: 7)
+</ParamField>
+
+<ParamField path="enhancedDescription" type="text">
+  AI-generated enhanced description
+</ParamField>
+
+<ParamField path="amenities" type="json">
+  Amenities grouped by category as JSON
+  
+  ```typescript
+  Array<{ category: string; items: string[] }>
+  ```
+</ParamField>
+
+<ParamField path="roomTypes" type="json">
+  Available room types as JSON
+  
+  ```typescript
+  Array<{ name: string; description: string; capacity?: string }>
+  ```
+</ParamField>
+
+<ParamField path="locationHighlights" type="text[]">
+  Array of location highlights and nearby attractions
+</ParamField>
+
+<ParamField path="pricingInfo" type="text">
+  Pricing information and details
+</ParamField>
+
+<ParamField path="country" type="text">
+  Country where the accommodation is located
+</ParamField>
+
+### Relations
+
+- **images**: One-to-many relationship with `accommodationImages` table
+- **itineraryAccommodations**: One-to-many relationship with `itineraryAccommodations` table
+
+---
+
+## itineraryAccommodations
+
+Join table linking accommodations to specific itinerary days.
+
+<ParamField path="id" type="uuid" required>
+  Unique identifier for the link (auto-generated)
+</ParamField>
+
+<ParamField path="itineraryDayId" type="uuid" required>
+  Reference to the itinerary day ID (cascade delete)
+</ParamField>
+
+<ParamField path="accommodationId" type="uuid" required>
+  Reference to the accommodation ID (cascade delete)
+</ParamField>
+
+### Relations
+
+- **day**: Many-to-one relationship with `itineraryDays` table
+- **accommodation**: Many-to-one relationship with `accommodations` table
+
+---
+
+## accommodationImages
+
+Images for accommodations stored in cloud storage.
+
+<ParamField path="id" type="uuid" required>
+  Unique identifier for the image (auto-generated)
+</ParamField>
+
+<ParamField path="accommodationId" type="uuid" required>
+  Reference to the accommodation ID (cascade delete)
+</ParamField>
+
+<ParamField path="bucket" type="text" required>
+  Storage bucket name
+</ParamField>
+
+<ParamField path="key" type="text" required>
+  Storage key/path for the image
+</ParamField>
+
+### Relations
+
+- **accommodation**: Many-to-one relationship with `accommodations` table
+
+### Indexes
+
+- `idx_accommodation_images_accommodation_id` on `accommodationId`
+
+---
+
+## activityLibrary
+
+Library of reusable activities for tours and proposals.
+
+<ParamField path="id" type="uuid" required>
+  Unique identifier for the activity (auto-generated)
+</ParamField>
+
+<ParamField path="name" type="text" required>
+  Name of the activity
+</ParamField>
+
+<ParamField path="description" type="text">
+  Description of the activity
+</ParamField>
+
+<ParamField path="imageUrl" type="text">
+  URL to the activity image
+</ParamField>
+
+<ParamField path="organizationId" type="uuid">
+  Reference to the organization ID (cascade delete)
+  
+  **Note**: `null` indicates a global activity available to all organizations
+</ParamField>
+
+<ParamField path="isGlobal" type="boolean" required>
+  Whether the activity is globally available. Default: `false`
+</ParamField>
+
+<ParamField path="createdAt" type="timestamp" required>
+  Timestamp when the activity was created (auto-generated)
+</ParamField>
+
+### Relations
+
+- **organization**: Many-to-one relationship with `organizations` table

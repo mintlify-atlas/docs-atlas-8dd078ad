@@ -1,0 +1,506 @@
+---
+title: Managing Accommodations
+description: Build and maintain your accommodation library for tour itineraries
+---
+
+Accommodations are the lodges, hotels, camps, and other properties where travelers stay during tours. Makisala maintains a centralized accommodation library that can be reused across multiple tours and proposals.
+
+## Accommodation Structure
+
+Accommodations are stored in the `accommodations` table:
+
+```typescript
+type Accommodation = {
+  id: string;
+  name: string;
+  url?: string; // Property website
+  overview?: string; // Short description (max 1000 chars)
+  description?: string; // Detailed info (max 5000 chars)
+  latitude?: string;
+  longitude?: string;
+  
+  // AI-generated content:
+  enhancedDescription?: string;
+  amenities?: Array<{ category: string; items: string[] }>;
+  roomTypes?: Array<{ name: string; description: string; capacity?: string }>;
+  locationHighlights?: string[];
+  pricingInfo?: string;
+  country?: string;
+  
+  // Relations:
+  images: AccommodationImage[];
+};
+```
+
+## Creating Accommodations
+
+Add new properties to your accommodation library:
+
+<Steps>
+  <Step title="Prepare Accommodation Data">
+    Gather essential information:
+    
+    ```typescript
+    const accommodationData = {
+      name: 'Serengeti Safari Lodge',
+      url: 'https://www.serengetilodge.com',
+      overview: 'Luxury tented camp in the heart of Serengeti',
+      description: `Located in the central Seronera area, this lodge 
+        offers panoramic views of the Serengeti plains. All rooms feature 
+        en-suite bathrooms, private verandas, and authentic safari decor.`,
+      latitude: '-2.333333',
+      longitude: '34.833333',
+      enhancedDescription: 'Experience luxury safari living...', // AI-generated
+      images: [
+        { key: 'lodges/serengeti-lodge-1.jpg', bucket: 'makisala-media' },
+        { key: 'lodges/serengeti-lodge-2.jpg', bucket: 'makisala-media' }
+      ]
+    };
+    ```
+  </Step>
+
+  <Step title="Create Accommodation">
+    Use the protected `create` mutation:
+    
+    ```typescript
+    const result = await trpc.accommodations.create.mutate(accommodationData);
+    
+    console.log('Created accommodation:', result.id);
+    ```
+    
+    This will:
+    - Insert the accommodation record
+    - Store images in the `accommodation_images` table
+    - Return the new accommodation ID
+  </Step>
+
+  <Step title="Verify Creation">
+    Fetch the accommodation to confirm:
+    
+    ```typescript
+    const accommodation = await trpc.accommodations.getById.query({ 
+      id: result.id 
+    });
+    
+    console.log(accommodation.name);
+    console.log(accommodation.images); // Array of image records
+    ```
+  </Step>
+</Steps>
+
+## Updating Accommodations
+
+Modify existing accommodations with the `update` mutation:
+
+```typescript
+await trpc.accommodations.update.mutate({
+  id: 'accommodation-uuid',
+  name: 'Updated Lodge Name',
+  overview: 'Updated short description',
+  description: 'Updated full description',
+  url: 'https://new-website.com',
+  latitude: '-2.5',
+  longitude: '34.9',
+  // Add new images:
+  newImages: [
+    { key: 'lodges/new-photo.jpg', bucket: 'makisala-media' }
+  ],
+  // Remove old images:
+  removedImageIds: ['old-image-uuid-1', 'old-image-uuid-2']
+});
+```
+
+<Info>
+  **Image Management**
+  - Add new images via `newImages` array (max 20)
+  - Remove images via `removedImageIds` array (max 50)
+  - Existing images not in `removedImageIds` are preserved
+</Info>
+
+## Searching Accommodations
+
+Find accommodations using the search endpoint:
+
+### Basic Search
+
+```typescript
+// Search by name
+const results = await trpc.accommodations.search.query({
+  query: 'Serengeti',
+  limit: 20
+});
+
+results.forEach(acc => {
+  console.log(acc.name);
+  console.log(acc.images[0]?.key); // First image only
+});
+```
+
+### Empty Query
+
+```typescript
+// Empty query returns first N accommodations
+const results = await trpc.accommodations.search.query({
+  query: '',
+  limit: 10
+});
+```
+
+<Note>
+  The search endpoint returns accommodations with only the **first image** for performance. Use `getById` for complete image galleries.
+</Note>
+
+## Paginated Listing
+
+For administrative interfaces, use the paginated list endpoint:
+
+```typescript
+const { accommodations, pagination } = await trpc.accommodations.list.query({
+  query: 'lodge', // Optional filter
+  page: 1,
+  limit: 10
+});
+
+console.log(`Page ${pagination.page} of ${pagination.totalPages}`);
+console.log(`Total: ${pagination.total} accommodations`);
+
+accommodations.forEach(acc => {
+  console.log(acc.name);
+  console.log('All images:', acc.images); // Full image array
+});
+```
+
+## Accommodation Images
+
+Images are stored separately in the `accommodation_images` table:
+
+```typescript
+type AccommodationImage = {
+  id: string;
+  accommodationId: string;
+  bucket: string; // R2/S3 bucket name
+  key: string;    // Object key/path
+};
+```
+
+### Image Storage Pattern
+
+When creating/updating accommodations:
+
+<Steps>
+  <Step title="Upload to Storage">
+    First, upload images to your storage service (R2, S3):
+    
+    ```typescript
+    // Upload handled separately by storage API
+    const uploadedImage = await uploadToStorage(file);
+    // Returns: { bucket: 'makisala-media', key: 'lodges/photo.jpg' }
+    ```
+  </Step>
+
+  <Step title="Reference in Accommodation">
+    Then reference the uploaded images:
+    
+    ```typescript
+    await trpc.accommodations.create.mutate({
+      name: 'My Lodge',
+      // ...
+      images: [
+        { bucket: uploadedImage.bucket, key: uploadedImage.key }
+      ]
+    });
+    ```
+  </Step>
+
+  <Step title="Retrieve with URLs">
+    Fetch accommodations and generate public URLs:
+    
+    ```typescript
+    const accommodations = await trpc.accommodations.getAll.query();
+    
+    // Each accommodation has images with generated URLs
+    accommodations[0].images.forEach(img => {
+      console.log(img.url); // Full public URL
+    });
+    ```
+  </Step>
+</Steps>
+
+## Linking Accommodations to Tours
+
+Accommodations are linked to itinerary days via the `itinerary_accommodations` join table:
+
+```typescript
+// When updating a tour:
+await trpc.tours.update.mutate({
+  id: 'tour-uuid',
+  itineraries: [
+    {
+      dayNumber: 1,
+      title: 'Day 1',
+      overview: '...',
+      accommodation_id: 'accommodation-uuid' // Links to accommodations table
+    }
+  ]
+});
+
+// Behind the scenes:
+// 1. Create itinerary_days record
+// 2. Create itinerary_accommodations record:
+//    { itineraryDayId: newDay.id, accommodationId: 'accommodation-uuid' }
+```
+
+### One Accommodation Per Day
+
+Currently, each itinerary day supports one accommodation. To suggest multiple options:
+
+<Warning>
+  The current schema supports **one accommodation per itinerary day**. For proposals with multiple accommodation options, consider:
+  
+  - Creating multiple tour variations
+  - Managing options at the proposal level (not tour template level)
+  - Using proposal days which support multiple accommodation links
+</Warning>
+
+## Accommodation Content Enhancement
+
+Makisala supports AI-enhanced accommodation content:
+
+### Structured Data Fields
+
+```typescript
+// Amenities categorized by type:
+amenities: [
+  {
+    category: 'Room Features',
+    items: ['En-suite bathroom', 'Private veranda', 'Minibar']
+  },
+  {
+    category: 'Lodge Facilities',
+    items: ['Swimming pool', 'Restaurant', 'Bar', 'Spa']
+  },
+  {
+    category: 'Activities',
+    items: ['Game drives', 'Bush walks', 'Sundowner drinks']
+  }
+]
+
+// Room type details:
+roomTypes: [
+  {
+    name: 'Luxury Tent',
+    description: 'Spacious canvas tent with king bed and ensuite',
+    capacity: '2 adults'
+  },
+  {
+    name: 'Family Tent',
+    description: 'Two-bedroom tent perfect for families',
+    capacity: '2 adults + 2 children'
+  }
+]
+
+// Location highlights:
+locationHighlights: [
+  'Central Serengeti location',
+  'Near Seronera River',
+  'Prime wildlife viewing area',
+  '2-hour drive from airstrip'
+]
+```
+
+<Info>
+  These fields are stored as JSON in the database and can be populated manually or via AI content generation services.
+</Info>
+
+## Lookup Optimization
+
+For itinerary builders and quick lookups, use the lightweight endpoint:
+
+```typescript
+// Returns accommodation with only first image (faster)
+const accommodation = await trpc.accommodations.getLookup.query({ 
+  id: 'accommodation-uuid' 
+});
+
+// vs. full data:
+const fullAccommodation = await trpc.accommodations.getById.query({ 
+  id: 'accommodation-uuid' 
+});
+```
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Naming Conventions">
+    Use clear, searchable names:
+    
+    - ✅ "Serengeti Kati Kati Tented Camp"
+    - ✅ "Four Seasons Safari Lodge Serengeti"
+    - ✅ "Ngorongoro Crater Lodge"
+    - ❌ "Lodge 1" or "Property A"
+    - ❌ "Best Lodge Ever!!!"
+    
+    Include location hints when helpful:
+    - "Arusha Coffee Lodge" (includes city)
+    - "Tarangire Treetops" (includes park)
+  </Accordion>
+
+  <Accordion title="Image Guidelines">
+    **Image Quality**
+    - Minimum 1200px width for main photos
+    - Use high-quality, well-lit images
+    - Show variety: exteriors, rooms, dining, amenities
+    
+    **Image Order**
+    - First image is featured in searches
+    - Order by importance/visual appeal
+    - Include 4-8 images per property
+    
+    **Storage Organization**
+    - Use consistent key patterns: `lodges/{property-name}/{image-name}.jpg`
+    - Include property name in filename
+    - Use descriptive names: `serengeti-lodge-exterior.jpg`
+  </Accordion>
+
+  <Accordion title="Description Writing">
+    **Overview (Short)**
+    - 1-2 sentences, max 1000 characters
+    - Highlight unique selling point
+    - Include location and style
+    
+    Example:
+    ```
+    "Luxury tented camp in the heart of the Serengeti, offering 
+    intimate wildlife encounters and exceptional service."
+    ```
+    
+    **Description (Full)**
+    - 2-4 paragraphs, max 5000 characters
+    - Cover: location, accommodation types, facilities, unique features
+    - Mention nearby attractions and wildlife
+    - Include any special notes (seasonal, family-friendly, etc.)
+  </Accordion>
+
+  <Accordion title="Location Data">
+    Always include latitude/longitude when available:
+    
+    ```typescript
+    latitude: '-2.333333',  // Decimal degrees
+    longitude: '34.833333'
+    ```
+    
+    Benefits:
+    - Enables map visualization in proposals
+    - Helps with distance calculations
+    - Supports location-based searches
+    
+    Use at least 6 decimal places for precision (~10cm accuracy).
+  </Accordion>
+
+  <Accordion title="Deduplication Strategy">
+    The `accommodations` table is a **master list** shared across all tours:
+    
+    - ✅ Create each property once
+    - ✅ Reuse across multiple tours
+    - ✅ Update centrally (changes reflect everywhere)
+    - ❌ Don't create duplicates for different tours
+    
+    Before creating:
+    1. Search existing accommodations
+    2. Check for similar names
+    3. Verify it's truly a new property
+  </Accordion>
+</AccordionGroup>
+
+## Validation Rules
+
+<Warning>
+  **Field Limits**
+  - `name`: 1-255 characters (required)
+  - `url`: Must be valid URL or empty
+  - `overview`: Max 1,000 characters
+  - `description`: Max 5,000 characters
+  - `enhancedDescription`: Max 10,000 characters
+  - `images`: Max 20 images per accommodation (create/update)
+  - `removedImageIds`: Max 50 IDs per update
+</Warning>
+
+## Example: Complete Accommodation
+
+Here's a fully populated accommodation:
+
+```typescript
+await trpc.accommodations.create.mutate({
+  name: 'Serengeti Kati Kati Tented Camp',
+  url: 'https://www.katikati-camp.com',
+  overview: 'Seasonal mobile tented camp following the wildebeest migration',
+  description: `Kati Kati ("center center" in Swahili) is a mobile tented 
+    camp that moves three times per year to follow the great migration. 
+    The camp features 15 spacious tents with ensuite bathrooms, a dining 
+    tent, and a campfire area. Situated in remote areas of the Serengeti, 
+    it offers an authentic safari experience with minimal environmental impact.`,
+  enhancedDescription: `Experience the ultimate mobile safari at Kati Kati...
+    [AI-generated extended content]`,
+  latitude: '-2.283333',
+  longitude: '34.833333',
+  country: 'Tanzania',
+  amenities: [
+    {
+      category: 'Tent Features',
+      items: [
+        'King-size bed',
+        'Ensuite bathroom with flush toilet',
+        'Hot bucket shower',
+        'Solar lighting',
+        'Private veranda'
+      ]
+    },
+    {
+      category: 'Camp Facilities',
+      items: [
+        'Dining tent',
+        'Lounge area',
+        'Campfire',
+        'Generator power (limited hours)'
+      ]
+    }
+  ],
+  roomTypes: [
+    {
+      name: 'Standard Tent',
+      description: 'Canvas tent with ensuite facilities',
+      capacity: '2 adults'
+    }
+  ],
+  locationHighlights: [
+    'Mobile camp following the migration',
+    'Remote wilderness locations',
+    'Northern Serengeti (Jul-Oct)',
+    'Central Serengeti (Nov-Jun)'
+  ],
+  pricingInfo: 'Full board including game drives',
+  images: [
+    { key: 'lodges/kati-kati/exterior.jpg', bucket: 'makisala-media' },
+    { key: 'lodges/kati-kati/tent-interior.jpg', bucket: 'makisala-media' },
+    { key: 'lodges/kati-kati/dining.jpg', bucket: 'makisala-media' },
+    { key: 'lodges/kati-kati/bathroom.jpg', bucket: 'makisala-media' }
+  ]
+});
+```
+
+## Related Resources
+
+<CardGroup cols={2}>
+  <Card title="Creating Tours" icon="map-location-dot" href="/tours/creating-tours">
+    Build tours using your accommodations
+  </Card>
+  <Card title="Itineraries" icon="map" href="/tours/itineraries">
+    Link accommodations to itinerary days
+  </Card>
+  <Card title="Storage" icon="cloud" href="/features/content-library">
+    Upload and manage accommodation images
+  </Card>
+  <Card title="Proposals" icon="file-contract" href="/proposals/creating-proposals">
+    Accommodations in client proposals
+  </Card>
+</CardGroup>

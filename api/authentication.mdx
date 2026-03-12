@@ -1,0 +1,499 @@
+---
+title: 'Authentication'
+description: 'Better Auth implementation with email/password, OAuth, passkeys, and multi-organization support'
+---
+
+## Overview
+
+Makisala uses [Better Auth](https://www.better-auth.com/) for authentication, providing:
+
+- Email/password authentication with verification
+- OAuth (Google) with automatic account linking
+- Passkey support for passwordless authentication
+- Multi-organization membership
+- Session management with active organization context
+- Polar billing integration
+
+## Better Auth Configuration
+
+The auth instance is configured in `/apps/kitasuro/src/lib/auth.ts`:
+
+```typescript
+import { betterAuth } from 'better-auth';
+import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { organization } from 'better-auth/plugins';
+import { passkey } from '@better-auth/passkey';
+import { polar } from '@polar-sh/better-auth';
+
+export const auth = betterAuth({
+  baseURL: env.NEXT_PUBLIC_APP_URL,
+  database: drizzleAdapter(db, {
+    provider: 'pg',
+  }),
+  emailAndPassword: {
+    enabled: true,
+    requireEmailVerification: true,
+  },
+  accountLinking: {
+    enabled: true,
+    trustedProviders: ['google'],
+  },
+  plugins: [
+    passkey({ /* ... */ }),
+    organization({ /* ... */ }),
+    polar({ /* ... */ }),
+  ],
+});
+```
+
+## Authentication Methods
+
+### Email & Password
+
+Users can sign up with email and password. Email verification is required:
+
+```typescript
+emailAndPassword: {
+  enabled: true,
+  requireEmailVerification: true,
+}
+```
+
+**Verification Email**: Sent automatically on sign-up using the `sendEmailVerificationEmail` hook:
+
+```typescript
+emailVerification: {
+  sendVerificationEmail: async ({ user, url }) => {
+    const verificationUrl = new URL(url);
+    verificationUrl.searchParams.set('callbackURL', '/onboarding?verified=true');
+
+    setImmediate(() => {
+      sendEmailVerificationEmail({
+        recipientEmail: user.email,
+        userName: user.name,
+        verificationUrl: verificationUrl.toString(),
+      }).catch((error) => {
+        log.warn('Failed to send verification email', { error });
+      });
+    });
+  },
+  sendOnSignUp: true,
+  autoSignInAfterVerification: true,
+}
+```
+
+### OAuth (Google)
+
+Google OAuth is configured with automatic account linking:
+
+```typescript
+socialProviders: {
+  google: {
+    clientId: env.GOOGLE_CLIENT_ID,
+    clientSecret: env.GOOGLE_CLIENT_SECRET,
+    prompt: 'select_account', // Force account selection
+  },
+},
+accountLinking: {
+  enabled: true,
+  trustedProviders: ['google'], // Auto-link verified Google accounts
+}
+```
+
+When a user signs in with Google using an email that already exists, the accounts are automatically linked.
+
+### Passkeys
+
+Passwordless authentication using WebAuthn passkeys:
+
+```typescript
+passkey({
+  rpID: new URL(env.NEXT_PUBLIC_APP_URL).hostname,
+  rpName: 'Ratiba',
+  origin: env.NEXT_PUBLIC_APP_URL,
+})
+```
+
+Passkeys are stored in the `passkey` table with device information:
+
+```sql
+CREATE TABLE passkey (
+  id TEXT PRIMARY KEY,
+  name TEXT,
+  public_key TEXT NOT NULL,
+  user_id TEXT NOT NULL REFERENCES user(id) ON DELETE CASCADE,
+  credential_id TEXT NOT NULL UNIQUE,
+  counter INTEGER NOT NULL,
+  device_type TEXT NOT NULL,
+  backed_up BOOLEAN NOT NULL,
+  transports TEXT,
+  created_at TIMESTAMP
+);
+```
+
+## Database Schema
+
+### User Table
+
+Defined in `/packages/db/src/schema.ts`:
+
+```typescript
+export const user = pgTable('user', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  email: text('email').notNull().unique(),
+  emailVerified: boolean('email_verified')
+    .$defaultFn(() => false)
+    .notNull(),
+  image: text('image'),
+  createdAt: timestamp('created_at')
+    .$defaultFn(() => new Date())
+    .notNull(),
+  updatedAt: timestamp('updated_at')
+    .$defaultFn(() => new Date())
+    .notNull(),
+  organizationId: uuid('organization_id').references(() => organizations.id),
+  role: UserRole('role').default('admin').notNull(),
+});
+```
+
+### Session Table
+
+Sessions include active organization context:
+
+```typescript
+export const session = pgTable('session', {
+  id: text('id').primaryKey(),
+  expiresAt: timestamp('expires_at').notNull(),
+  token: text('token').notNull().unique(),
+  createdAt: timestamp('created_at').notNull(),
+  updatedAt: timestamp('updated_at').notNull(),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  activeOrganizationId: uuid('active_organization_id')
+    .references(() => organizations.id, { onDelete: 'set null' }),
+});
+```
+
+### Account Table (OAuth & Passkeys)
+
+Stores OAuth provider accounts:
+
+```typescript
+export const account = pgTable('account', {
+  id: text('id').primaryKey(),
+  accountId: text('account_id').notNull(),
+  providerId: text('provider_id').notNull(), // 'google', 'polar', etc.
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  accessToken: text('access_token'),
+  refreshToken: text('refresh_token'),
+  idToken: text('id_token'),
+  accessTokenExpiresAt: timestamp('access_token_expires_at'),
+  refreshTokenExpiresAt: timestamp('refresh_token_expires_at'),
+  scope: text('scope'),
+  password: text('password'),
+  createdAt: timestamp('created_at').notNull(),
+  updatedAt: timestamp('updated_at').notNull(),
+});
+```
+
+## Session Management
+
+### Creating Sessions
+
+When a user signs in, Better Auth automatically creates a session. The `databaseHooks.session.create.before` hook sets the initial active organization:
+
+```typescript
+databaseHooks: {
+  session: {
+    create: {
+      before: async (session) => {
+        // Set initial active organization when session is created
+        const [membership] = await db
+          .select({ organizationId: member.organizationId })
+          .from(member)
+          .where(eq(member.userId, session.userId))
+          .limit(1);
+
+        return {
+          data: {
+            ...session,
+            activeOrganizationId: membership?.organizationId || null,
+          },
+        };
+      },
+    },
+  },
+}
+```
+
+### Getting Current Session
+
+In tRPC procedures, the session is available via the context:
+
+```typescript
+import { getSession } from '@/lib/session';
+
+export async function createContext() {
+  return { getSession, db };
+}
+
+// In a protected procedure
+const session = await ctx.getSession();
+const userId = session.user.id;
+const orgId = session.session.activeOrganizationId;
+```
+
+### Client-Side Session
+
+On the frontend, use the `useSession` hook:
+
+```typescript
+import { useSession } from '@/lib/auth-client';
+
+function MyComponent() {
+  const { data: session, isPending } = useSession();
+
+  if (isPending) return <div>Loading...</div>;
+  if (!session) return <div>Not authenticated</div>;
+
+  return <div>Hello {session.user.name}!</div>;
+}
+```
+
+## Multi-Organization Support
+
+The organization plugin enables users to belong to multiple organizations:
+
+```typescript
+organization({
+  allowUserToCreateOrganization: true,
+  creatorRole: 'admin',
+  invitationExpiresIn: 60 * 60 * 24 * 7, // 7 days
+  schema: {
+    organization: {
+      modelName: 'organizations',
+      fields: {
+        id: 'id',
+        name: 'name',
+        slug: 'slug',
+        logo: 'logo_url',
+        createdAt: 'created_at',
+      },
+    },
+  },
+})
+```
+
+### Member Table
+
+Links users to organizations with roles:
+
+```typescript
+export const member = pgTable('member', {
+  id: text('id').primaryKey(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  role: text('role').notNull().default('member'), // 'admin' or 'member'
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+});
+```
+
+### Invitation Table
+
+Manages organization invitations:
+
+```typescript
+export const invitation = pgTable('invitation', {
+  id: text('id').primaryKey(),
+  email: text('email').notNull(),
+  inviterId: text('inviter_id').references(() => user.id, { onDelete: 'set null' }),
+  organizationId: uuid('organization_id')
+    .notNull()
+    .references(() => organizations.id, { onDelete: 'cascade' }),
+  role: text('role').notNull().default('member'),
+  status: text('status').notNull().default('pending'),
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  expiresAt: timestamp('expires_at').notNull(),
+});
+```
+
+### Automatic Organization Creation
+
+When a new user signs up (without a pending invitation), an organization is automatically created:
+
+```typescript
+databaseHooks: {
+  user: {
+    create: {
+      after: async (user) => {
+        // Check if there's a pending invitation
+        const [pendingInvitation] = await db
+          .select()
+          .from(invitation)
+          .where(and(eq(invitation.email, user.email), eq(invitation.status, 'pending')))
+          .limit(1);
+
+        // If invitation exists, user will accept it separately
+        if (pendingInvitation) return;
+
+        // Create new organization for the user
+        const orgName = `${user.name}'s Agency`;
+        const slug = `${sanitizeSlug(user.name)}-${randomBytes(8).toString('hex')}`;
+
+        const [org] = await db
+          .insert(organizations)
+          .values({
+            name: orgName,
+            slug: slug,
+            trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14-day trial
+          })
+          .returning();
+
+        // Add user as admin member
+        await db.insert(member).values({
+          id: randomBytes(16).toString('hex'),
+          userId: user.id,
+          organizationId: org.id,
+          role: 'admin',
+        });
+      },
+    },
+  },
+}
+```
+
+## Client Usage
+
+The auth client is configured in `/apps/kitasuro/src/lib/auth-client.ts`:
+
+```typescript
+import { createAuthClient } from 'better-auth/react';
+import { organizationClient } from 'better-auth/client/plugins';
+import { passkeyClient } from '@better-auth/passkey/client';
+import { polarClient } from '@polar-sh/better-auth/client';
+
+export const authClient = createAuthClient({
+  baseURL: env.NEXT_PUBLIC_APP_URL,
+  plugins: [organizationClient(), passkeyClient(), polarClient()],
+});
+
+export const {
+  signIn,
+  signUp,
+  useSession,
+  signOut,
+  organization,
+  useActiveOrganization,
+  useListOrganizations,
+  checkout,
+  customer,
+} = authClient;
+```
+
+### Sign In
+
+```typescript
+import { signIn } from '@/lib/auth-client';
+
+// Email/Password
+await signIn.email({
+  email: 'user@example.com',
+  password: 'password123',
+});
+
+// Google OAuth
+await signIn.social({
+  provider: 'google',
+  callbackURL: '/dashboard',
+});
+
+// Passkey
+await signIn.passkey();
+```
+
+### Sign Up
+
+```typescript
+import { signUp } from '@/lib/auth-client';
+
+await signUp.email({
+  email: 'user@example.com',
+  password: 'password123',
+  name: 'John Doe',
+});
+```
+
+### Organization Management
+
+```typescript
+import { organization, useActiveOrganization } from '@/lib/auth-client';
+
+// Get active organization
+const { data: activeOrg } = useActiveOrganization();
+
+// Switch organization
+await organization.setActive({
+  organizationId: 'org-id',
+});
+
+// Invite member
+await organization.inviteMember({
+  email: 'member@example.com',
+  role: 'member',
+  organizationId: activeOrg.id,
+});
+```
+
+## API Route Handler
+
+Better Auth is exposed via Next.js App Router at `/api/auth/[...better-auth]/route.ts`:
+
+```typescript
+import { auth } from '@/lib/auth';
+import { toNextJsHandler } from 'better-auth/next-js';
+
+export const { POST, GET } = toNextJsHandler(auth);
+```
+
+This creates endpoints for:
+- `/api/auth/sign-in/*`
+- `/api/auth/sign-up/*`
+- `/api/auth/sign-out`
+- `/api/auth/session`
+- `/api/auth/passkey/*`
+- And more...
+
+## Security Features
+
+### Email Verification
+
+- Required for email/password sign-ups
+- Verification emails sent asynchronously via `setImmediate` to prevent timing attacks
+- Auto sign-in after verification
+
+### Account Linking
+
+- Google accounts with verified emails automatically link to existing users
+- Prevents duplicate accounts for the same email
+
+### Session Security
+
+- Sessions tied to IP address and user agent
+- Automatic session expiration
+- Secure token storage
+
+### Organization Access Control
+
+- Multi-tenancy with organization-scoped data
+- Role-based access (admin/member)
+- Invitation-only team access
